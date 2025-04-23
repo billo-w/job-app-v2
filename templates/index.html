@@ -4,11 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Adzuna Job Insights</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css" integrity="sha512-xh6O/CkQoPOWDdYTDqeRdPCVd1SpvCA9XXcUnZS2FmJNp1coAFzvtCN9BmamE+4aHK8yyUHUSCcJHgXloTyT2A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="[https://cdn.tailwindcss.com](https://cdn.tailwindcss.com)"></script>
+    <link rel="stylesheet" href="[https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css](https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css)" integrity="sha512-xh6O/CkQoPOWDdYTDqeRdPCVd1SpvCA9XXcUnZS2FmJNp1coAFzvtCN9BmamE+4aHK8yyUHUSCcJHgXloTyT2A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="preconnect" href="[https://fonts.googleapis.com](https://fonts.googleapis.com)">
+    <link rel="preconnect" href="[https://fonts.gstatic.com](https://fonts.gstatic.com)" crossorigin>
+    <link href="[https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap](https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap)" rel="stylesheet">
 
     <style>
         /* Apply the Inter font family if loaded */
@@ -28,6 +28,11 @@
             color: #c53030; /* text-red-700 */
             border-color: #f56565; /* border-red-400 */
         }
+        .flash-warning { /* For AI summary issues */
+             background-color: #fffaf0; /* bg-orange-50 */
+             color: #c05621; /* text-orange-700 */
+             border-color: #fbd38d; /* border-orange-300 */
+        }
         .flash-success { /* Example if you add success messages */
              background-color: #f0fff4; /* bg-green-50 */
              color: #2f855a; /* text-green-700 */
@@ -36,8 +41,6 @@
         /* Subtle background pattern */
         body {
            /* background-color: #f7fafc; */ /* bg-gray-100 */
-           /* Optional subtle pattern */
-           /* background-image: linear-gradient(rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.95)), url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Cg fill-rule='evenodd'%3E%3Cg fill='%23cbd5e0' fill-opacity='0.2'%3E%3Cpath d='M0 38.59l2.83-2.83 1.41 1.41L1.41 40H0v-1.41zM0 1.4l2.83 2.83 1.41-1.41L1.41 0H0v1.41zM38.59 40l-2.83-2.83 1.41-1.41L40 38.59V40h-1.41zM40 1.41l-2.83 2.83-1.41-1.41L38.59 0H40v1.41zM20 18.6l2.83-2.83 1.41 1.41L21.41 20l2.83 2.83-1.41 1.41L20 21.41l-2.83 2.83-1.41-1.41L18.59 20l-2.83-2.83 1.41-1.41L20 18.59z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E"); */
         }
         /* Add transition for smoother hover effects */
         .transition-smooth {
@@ -50,6 +53,14 @@
             -webkit-box-orient: vertical;
             -webkit-line-clamp: 3;
         }
+        /* AI Summary Box Styling */
+        .ai-summary-box {
+            background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%); /* Light indigo gradient */
+            border: 1px solid #c7d2fe; /* border-indigo-300 */
+            border-left-width: 4px;
+            border-left-color: #6366f1; /* border-l-indigo-500 */
+            color: #3730a3; /* text-indigo-800 */
+        }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800 antialiased">
@@ -61,14 +72,15 @@
                  <i class="fas fa-briefcase fa-2x"></i>
             </div>
             <h1 class="text-3xl sm:text-4xl font-bold text-gray-900">Job Market Insights</h1>
-            <p class="text-gray-600 mt-2 text-lg">Discover job opportunities with Adzuna</p>
+            <p class="text-gray-600 mt-2 text-lg">Discover job opportunities with Adzuna & AI Summary</p>
         </header>
 
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
-                <div class="max-w-2xl mx-auto">
+                <div class="max-w-3xl mx-auto"> {# Increased max-width slightly #}
                 {% for category, message in messages %}
-                    <div class="flash-message flash-{{ category }}">{{ message }}</div>
+                    {# Use category in class name, default to 'info' if category is missing #}
+                    <div class="flash-message flash-{{ category | default('info') }}">{{ message }}</div>
                 {% endfor %}
                 </div>
             {% endif %}
@@ -109,8 +121,8 @@
         </div>
 
         {% if insights %}
-        <section id="results" class="transition-smooth">
-            <header class="mb-6 text-center md:text-left">
+        <section id="results" class="transition-smooth space-y-8"> {# Added space-y for spacing between elements #}
+            <header class="text-center md:text-left">
                  <h2 class="text-2xl font-semibold text-gray-800">
                     Search Results
                  </h2>
@@ -120,31 +132,42 @@
                  </p>
             </header>
 
+            {% if insights.ai_summary %}
+            <div class="ai-summary-box p-5 rounded-lg shadow-md">
+                <h3 class="text-lg font-semibold mb-2 flex items-center">
+                    <i class="fa-solid fa-robot mr-2 text-indigo-600"></i> AI Market Summary
+                </h3>
+                <p class="text-sm leading-relaxed">{{ insights.ai_summary }}</p>
+            </div>
+            {% endif %}
             {% if insights.job_listings %}
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {% for job in insights.job_listings %}
-                    <div class="bg-white border border-gray-200 p-5 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 ease-in-out flex flex-col justify-between">
-                        <div>
-                            <h3 class="text-lg font-semibold text-indigo-700 mb-1 group-hover:underline">
-                                <a href="{{ job.url }}" target="_blank" rel="noopener noreferrer" class="hover:underline">{{ job.title }}</a>
-                            </h3>
-                            <div class="text-sm text-gray-600 mb-3 space-x-3">
-                                <span><i class="fa-regular fa-building mr-1 opacity-75"></i> {{ job.company }}</span>
-                                <span><i class="fa-solid fa-location-dot mr-1 opacity-75"></i> {{ job.location }}</span>
+                <div> {# Wrap job listings in a div for better structure #}
+                    <h3 class="text-xl font-semibold text-gray-700 mb-4 text-center md:text-left">Sample Job Listings:</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {% for job in insights.job_listings %}
+                        <div class="bg-white border border-gray-200 p-5 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 ease-in-out flex flex-col justify-between">
+                            <div>
+                                <h4 class="text-lg font-semibold text-indigo-700 mb-1 group-hover:underline"> {# Changed h3 to h4 for better hierarchy #}
+                                    <a href="{{ job.url }}" target="_blank" rel="noopener noreferrer" class="hover:underline">{{ job.title }}</a>
+                                </h4>
+                                <div class="text-sm text-gray-600 mb-3 space-x-3">
+                                    <span><i class="fa-regular fa-building mr-1 opacity-75"></i> {{ job.company }}</span>
+                                    <span><i class="fa-solid fa-location-dot mr-1 opacity-75"></i> {{ job.location }}</span>
+                                </div>
+                                <p class="text-sm text-gray-700 line-clamp-3 mb-3">
+                                    {{ job.description }}
+                                </p>
                             </div>
-                            <p class="text-sm text-gray-700 line-clamp-3 mb-3">
-                                {{ job.description }}
-                            </p>
+                            <div class="flex justify-between items-center mt-3 pt-3 border-t border-gray-100">
+                                <p class="text-xs text-gray-500">
+                                    Posted: {{ job.created.split('T')[0] }} </p>
+                                <a href="{{ job.url }}" target="_blank" rel="noopener noreferrer" class="text-sm text-indigo-600 hover:text-indigo-800 font-medium transition-smooth">
+                                    View Job <i class="fas fa-arrow-right text-xs ml-1"></i>
+                                </a>
+                            </div>
                         </div>
-                        <div class="flex justify-between items-center mt-3 pt-3 border-t border-gray-100">
-                            <p class="text-xs text-gray-500">
-                                Posted: {{ job.created.split('T')[0] }} </p>
-                            <a href="{{ job.url }}" target="_blank" rel="noopener noreferrer" class="text-sm text-indigo-600 hover:text-indigo-800 font-medium transition-smooth">
-                                View Job <i class="fas fa-arrow-right text-xs ml-1"></i>
-                            </a>
-                        </div>
+                        {% endfor %}
                     </div>
-                    {% endfor %}
                 </div>
             {% else %}
                 <div class="bg-white p-6 rounded-lg shadow-sm text-center text-gray-500 border border-gray-200">
@@ -165,7 +188,7 @@
 
     <footer class="text-center mt-12 mb-6">
         <p class="text-sm text-gray-500">
-            Powered by the <a href="https://developer.adzuna.com/" target="_blank" rel="noopener noreferrer" class="text-indigo-600 hover:underline font-medium">Adzuna API</a>
+            Powered by the <a href="[https://developer.adzuna.com/](https://developer.adzuna.com/)" target="_blank" rel="noopener noreferrer" class="text-indigo-600 hover:underline font-medium">Adzuna API</a> & Azure AI
         </p>
     </footer>
 
