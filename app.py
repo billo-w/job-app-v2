@@ -46,8 +46,8 @@ def get_ai_summary(query_details, total_jobs, job_listings_sample):
     sample_titles = [job['title'] for job in job_listings_sample[:7]]
 
     system_message = (
-        "You are an AI assistant acting as a recruitment market analyst. "
-        "Your goal is to provide concise hiring insights based on job volume data."
+        "You are an AI assistant to proivde valuable information on the job market to recruiters or job finders. "
+        "Your goal is to provide hiring insights based on job volume data."
     )
     user_prompt = (
         f"Analyze the following job market data for a recruiter looking to hire for '{query_details['what']}' "
@@ -55,11 +55,7 @@ def get_ai_summary(query_details, total_jobs, job_listings_sample):
         f"Data Points:\n"
         f"- Total matching job listings found: {total_jobs}\n"
         f"- Sample similar job titles advertised: {', '.join(sample_titles) if sample_titles else 'None available'}\n\n"
-        f"Based *only* on the total number of job listings, provide brief insights (3-4 sentences total) covering:\n"
-        f"1.  **Market Activity Level:** Is the current hiring volume for this role high, medium, or low in this location?\n"
-        f"2.  **Potential Candidate Pool Indication:** Does this volume suggest the local candidate pool might be broad or potentially limited?\n"
-        f"3.  **Recruitment Approach Implication:** What might this activity level imply for a recruiter's strategy (e.g., expect many applications vs. need for proactive sourcing)?\n\n"
-        f"Do not mention salary or specific skills not provided in the data. Be concise."
+        f"Based *only* on the total number of job listings, provide brief insights on the job market"
     )
 
     payload = {
