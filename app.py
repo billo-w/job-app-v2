@@ -13,8 +13,8 @@ app = Flask(__name__, template_folder='templates')
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'a_default_secret_key_for_dev') # Use env var for production
 
 # Retrieve Adzuna API credentials from environment variables
-ADZUNA_APP_ID = os.getenv('097e6d2b')
-ADZUNA_APP_KEY = os.getenv('0c898297bdb1a718e032e8de102fc05f')
+ADZUNA_APP_ID = os.getenv('ADZUNA_APP_ID')
+ADZUNA_APP_KEY = os.getenv('ADZUNA_APP_KEY')
 
 # Adzuna API base URL
 ADZUNA_API_BASE_URL = 'https://api.adzuna.com/v1/api/jobs'
