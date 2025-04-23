@@ -18,7 +18,7 @@ app.secret_key = os.getenv('FLASK_SECRET_KEY', 'a_default_secret_key_for_dev')
 ADZUNA_APP_ID = os.getenv('ADZUNA_APP_ID')
 ADZUNA_APP_KEY = os.getenv('ADZUNA_APP_KEY')
 ADZUNA_API_BASE_URL = 'https://api.adzuna.com/v1/api/jobs'
-RESULTS_PER_PAGE = 20 # Increased number of jobs to fetch
+RESULTS_PER_PAGE = 100 # Increased number of jobs to fetch
 
 # --- Azure AI Foundry Configuration ---
 AZURE_AI_ENDPOINT = os.getenv('AZURE_AI_ENDPOINT')
