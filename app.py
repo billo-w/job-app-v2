@@ -2,10 +2,10 @@ import os
 import requests
 from flask import Flask, request, jsonify, render_template, flash
 from dotenv import load_dotenv
-import logging # Import logging
+import logging
 
 # Configure basic logging
-logging.basicConfig(level=logging.INFO) # Log informational messages and above
+logging.basicConfig(level=logging.INFO)
 
 # Load environment variables from a .env file
 load_dotenv()
@@ -20,12 +20,14 @@ ADZUNA_APP_KEY = os.getenv('ADZUNA_APP_KEY')
 ADZUNA_API_BASE_URL = 'https://api.adzuna.com/v1/api/jobs'
 
 # --- Azure AI Foundry Configuration ---
+# IMPORTANT: This should be the FULL endpoint URL including deployment name and api-version
+# e.g., https://<resourcename>.openai.azure.com/openai/deployments/<deploymentname>/chat/completions?api-version=YYYY-MM-DD
 AZURE_AI_ENDPOINT = os.getenv('AZURE_AI_ENDPOINT')
 AZURE_AI_KEY = os.getenv('AZURE_AI_KEY')
 
 def get_ai_summary(query_details, total_jobs, job_listings_sample):
     """
-    Calls the deployed Azure AI model to generate a job market summary.
+    Calls the deployed Azure AI (OpenAI compatible) model to generate a job market summary.
 
     Args:
         query_details (dict): Contains 'what', 'where', 'country'.
@@ -39,55 +41,55 @@ def get_ai_summary(query_details, total_jobs, job_listings_sample):
         app.logger.warning("Azure AI Endpoint or Key not configured. Skipping summary.")
         return None
 
-    # --- Prepare the prompt for the AI model ---
-    # Extract titles from the sample for brevity in the prompt
+    # --- Prepare the prompt for the AI model (Chat Completions format) ---
     sample_titles = [job['title'] for job in job_listings_sample[:5]] # Use top 5 titles
 
-    prompt = (
+    system_message = "You are an AI assistant providing brief job market summaries."
+    user_prompt = (
         f"Summarize the current job market based on the following data for '{query_details['what']}' jobs "
         f"in '{query_details['where']}, {query_details['country'].upper()}'.\n\n"
         f"Total matching jobs found: {total_jobs}\n"
         f"Sample job titles found: {', '.join(sample_titles) if sample_titles else 'None available'}\n\n"
-        f"Provide a brief (2-3 sentences) overview of the market activity and demand for this role in this location."
+        f"Provide a concise (2-3 sentences) overview of the market activity and demand for this role in this location. Focus on whether the market seems active or quiet."
     )
 
-    # --- Prepare the request payload for Azure AI ---
-    # This structure might vary depending on your specific Azure AI model deployment.
-    # Check the expected input format for your endpoint.
+    # --- Prepare the request payload for Azure OpenAI Chat Completions ---
     payload = {
-        "prompt": prompt,
-        # Add other parameters your model might expect (e.g., max_tokens, temperature)
+        "messages": [
+            {"role": "system", "content": system_message},
+            {"role": "user", "content": user_prompt}
+        ],
         "max_tokens": 100,
-        "temperature": 0.7
+        "temperature": 0.6 # Slightly lower temp for more factual summary
     }
 
-    # --- Prepare Headers ---
-    # Common header for Azure OpenAI or custom deployments.
-    # Adjust 'Authorization' or header name if your deployment uses a different scheme (e.g., 'api-key').
+    # --- Prepare Headers for Azure OpenAI ---
     headers = {
         'Content-Type': 'application/json',
-        'Authorization': f'Bearer {AZURE_AI_KEY}'
-        # Or potentially: 'api-key': AZURE_AI_KEY
+        'api-key': AZURE_AI_KEY # Use 'api-key' header for Azure OpenAI
     }
 
     app.logger.info(f"Sending request to Azure AI Endpoint: {AZURE_AI_ENDPOINT}")
     try:
-        response = requests.post(AZURE_AI_ENDPOINT, headers=headers, json=payload, timeout=20) # Added timeout
+        # Use the full endpoint URL provided in the environment variable
+        response = requests.post(AZURE_AI_ENDPOINT, headers=headers, json=payload, timeout=25) # Increased timeout slightly
         response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
 
-        # --- Extract Summary from Response ---
-        # Adjust the parsing based on the actual JSON structure returned by your Azure AI model.
-        # Common examples: response_data.get('choices')[0].get('text') or response_data.get('summary')
+        # --- Extract Summary from Chat Completions Response ---
         response_data = response.json()
-        summary = response_data.get('summary') # Example: Adjust key based on actual response
-        if not summary and 'choices' in response_data and response_data['choices']:
-             summary = response_data['choices'][0].get('text') # Example for OpenAI-like response
 
-        if summary:
-            app.logger.info("Successfully received summary from Azure AI.")
-            return summary.strip()
+        # Standard path for chat completions response content
+        if 'choices' in response_data and len(response_data['choices']) > 0:
+            message = response_data['choices'][0].get('message')
+            if message and 'content' in message:
+                summary = message['content']
+                app.logger.info("Successfully received summary from Azure AI.")
+                return summary.strip()
+            else:
+                 app.logger.warning(f"Azure AI response 'choices' structure unexpected: {message}")
+                 return None
         else:
-            app.logger.warning(f"Azure AI response did not contain expected summary field. Response: {response_data}")
+            app.logger.warning(f"Azure AI response did not contain expected 'choices' field. Response: {response_data}")
             return None
 
     except requests.exceptions.Timeout:
@@ -96,15 +98,19 @@ def get_ai_summary(query_details, total_jobs, job_listings_sample):
         return None
     except requests.exceptions.RequestException as e:
         app.logger.error(f"Error calling Azure AI endpoint: {e}")
-        # Log more details if available (e.g., response body for HTTP errors)
         error_details = ""
         if e.response is not None:
             try:
                 error_details = e.response.text
-            except Exception:
-                pass # Ignore if response body isn't readable
-            app.logger.error(f"Azure AI Response Status: {e.response.status_code}, Body: {error_details[:500]}") # Log first 500 chars
-        flash(f"Could not generate AI summary: Error communicating with the AI service.", "warning")
+            except Exception: pass
+            # Log specific Azure error if available
+            try:
+                error_json = e.response.json()
+                if 'error' in error_json:
+                    app.logger.error(f"Azure AI Error Code: {error_json['error'].get('code')}, Message: {error_json['error'].get('message')}")
+            except Exception: pass # Ignore if response isn't JSON or doesn't have 'error'
+            app.logger.error(f"Azure AI Raw Response Status: {e.response.status_code}, Body: {error_details[:500]}")
+        flash(f"Could not generate AI summary: Error communicating with the AI service (Status: {e.response.status_code if e.response is not None else 'N/A'}). Please check configuration.", "warning")
         return None
     except Exception as e:
         app.logger.error(f"Unexpected error during AI summary generation: {e}")
@@ -154,7 +160,7 @@ def get_insights():
     # --- Call Adzuna API ---
     try:
         app.logger.info(f"Fetching Adzuna data for: {params}")
-        response = requests.get(api_url, params=params, timeout=15) # Added timeout
+        response = requests.get(api_url, params=params, timeout=15)
         response.raise_for_status()
         data = response.json()
         app.logger.info("Successfully fetched data from Adzuna.")
@@ -207,7 +213,6 @@ def get_insights():
         flash("An internal server error occurred while retrieving job data.", "error")
 
     # --- Render Template ---
-    # insights_data will be None if Adzuna call failed, otherwise it contains Adzuna data and potentially AI summary
     return render_template('index.html', insights=insights_data, form_data=form_data)
 
 
