@@ -46,7 +46,7 @@ def get_ai_summary(query_details, total_jobs, job_listings_sample):
     sample_titles = [job['title'] for job in job_listings_sample[:7]]
 
     system_message = (
-        "You are an AI assistant to proivde valuable information on the job market to recruiters or job finders. "
+        "You are an AI assistant to proivde valuable information on the job market for recruiters. "
         "Your goal is to provide hiring insights based on job volume data."
     )
     user_prompt = (
@@ -56,6 +56,7 @@ def get_ai_summary(query_details, total_jobs, job_listings_sample):
         f"- Total matching job listings found: {total_jobs}\n"
         f"- Sample similar job titles advertised: {', '.join(sample_titles) if sample_titles else 'None available'}\n\n"
         f"Based *only* on the total number of job listings, provide brief insights on the job market"
+        f"Also, provide a summary of the most common skills required for these roles on based on the data provided"
     )
 
     payload = {
