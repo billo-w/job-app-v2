@@ -51,6 +51,8 @@ def get_ai_summary(query_details, total_jobs, job_listings_sample):
         f"Total matching jobs found: {total_jobs}\n"
         f"Sample job titles found: {', '.join(sample_titles) if sample_titles else 'None available'}\n\n"
         f"Provide a concise (2-3 sentences) overview of the market activity and demand for this role in this location. Focus on whether the market seems active or quiet."
+        f"Also, provide the average salary range for this role and any notable trends or observations based on the job listings.\n\n"
+        f"Please do not include any personal opinions or subjective statements. Just provide the facts based on the data provided."
     )
 
     # --- Prepare the request payload for Azure OpenAI Chat Completions ---
