@@ -46,13 +46,16 @@ def get_ai_summary(query_details, total_jobs, job_listings_sample):
 
     system_message = "You are an AI assistant providing brief job market summaries."
     user_prompt = (
-        f"Summarize the current job market based on the following data for '{query_details['what']}' jobs "
+        f"Analyze the following job market data for a recruiter looking to hire for '{query_details['what']}' "
         f"in '{query_details['where']}, {query_details['country'].upper()}'.\n\n"
-        f"Total matching jobs found: {total_jobs}\n"
-        f"Sample job titles found: {', '.join(sample_titles) if sample_titles else 'None available'}\n\n"
-        f"Provide a concise (2-3 sentences) overview of the market activity and demand for this role in this location. Focus on whether the market seems active or quiet."
-        f"Also, provide the average salary range for this role and any notable trends or observations based on the job listings.\n\n"
-        f"Please do not include any personal opinions or subjective statements. Just provide the facts based on the data provided."
+        f"Data Points:\n"
+        f"- Total matching job listings found: {total_jobs}\n"
+        f"- Sample similar job titles advertised: {', '.join(sample_titles) if sample_titles else 'None available'}\n\n"
+        f"Based *only* on the total number of job listings, provide brief insights (3-4 sentences total) covering:\n"
+        f"1.  **Market Activity Level:** Is the current hiring volume for this role high, medium, or low in this location?\n"
+        f"2.  **Potential Candidate Pool Indication:** Does this volume suggest the local candidate pool might be broad or potentially limited?\n"
+        f"3.  **Recruitment Approach Implication:** What might this activity level imply for a recruiter's strategy (e.g., expect many applications vs. need for proactive sourcing)?\n\n"
+        f"Do not mention salary or specific skills not provided in the data. Be concise."
     )
 
     # --- Prepare the request payload for Azure OpenAI Chat Completions ---
