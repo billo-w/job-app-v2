@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }} - Job Insights</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .job-card:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.07), 0 4px 6px -4px rgb(0 0 0 / 0.07); }
+        .transition-all-ease { transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased">
+    <nav class="bg-white shadow-sm border-b border-slate-200">
+        <div class="container mx-auto px-4 max-w-5xl">
+            <div class="flex justify-between items-center py-3">
+                <a href="{{ url_for('home') }}" class="text-xl font-bold text-indigo-600">Job Insights</a>
+                <div>
+                    <a href="{{ url_for('home') }}" class="text-sm font-medium text-slate-600 hover:text-indigo-600 mr-4">Search</a>
+                    <a href="{{ url_for('saved_jobs_list') }}" class="text-sm font-medium text-indigo-600 hover:text-indigo-700 mr-4">Saved Jobs</a>
+                    <a href="{{ url_for('logout') }}" class="text-sm font-medium text-slate-600 hover:text-indigo-600">Logout</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mx-auto px-4 py-10 md:py-12 max-w-5xl">
+        <h1 class="text-3xl font-bold text-slate-800 mb-8">Your Saved Jobs</h1>
+
+         {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                     <div class="p-4 mb-6 text-sm rounded-lg
+                        {% if category == 'error' %} bg-red-100 text-red-700
+                        {% elif category == 'success' %} bg-green-100 text-green-700
+                        {% else %} bg-blue-100 text-blue-700 {% endif %}" role="alert">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        {% if jobs %}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {% for job in jobs %}
+                <div class="job-card bg-white border border-slate-200/80 p-5 rounded-lg shadow-sm transition-all-ease flex flex-col justify-between">
+                    <div>
+                        <h4 class="text-lg font-semibold text-indigo-700 hover:text-indigo-800 mb-1.5">
+                            <a href="{{ job.adzuna_url }}" target="_blank" rel="noopener noreferrer" class="hover:underline">{{ job.title }}</a>
+                        </h4>
+                        <div class="text-sm text-slate-600 mb-3 space-y-1">
+                            <p><i class="fa-regular fa-building mr-1.5 w-4 text-center opacity-70"></i> {{ job.company if job.company else 'N/A' }}</p>
+                            <p><i class="fa-solid fa-location-dot mr-1.5 w-4 text-center opacity-70"></i> {{ job.location if job.location else 'N/A' }}</p>
+                        </div>
+                        </div>
+                    <div class="flex justify-between items-center mt-3 pt-4 border-t border-slate-100">
+                         <form action="{{ url_for('unsave_job') }}" method="POST" class="inline">
+                            <input type="hidden" name="adzuna_job_id" value="{{ job.adzuna_job_id }}">
+                            <button type="submit" class="text-sm text-red-600 hover:text-red-800 font-medium transition-all-ease group">
+                                <i class="fas fa-trash-can mr-1"></i> Remove
+                            </button>
+                        </form>
+                        <a href="{{ job.adzuna_url }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center text-sm text-indigo-600 hover:text-indigo-800 font-medium transition-all-ease group">
+                            View Original <i class="fas fa-arrow-right text-xs ml-1.5 group-hover:translate-x-0.5 transition-transform"></i>
+                        </a>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        {% else %}
+             <div class="bg-white p-8 rounded-lg shadow-sm text-center text-slate-500 border border-slate-200/80">
+                <i class="fas fa-inbox fa-2x text-slate-400 mb-4"></i>
+                <p class="font-medium">You haven't saved any jobs yet.</p>
+                <p class="text-sm">Go back to the <a href="{{ url_for('home') }}" class="text-indigo-600 hover:underline">search page</a> to find and save jobs.</p>
+            </div>
+        {% endif %}
+    </div>
+
+     <footer class="text-center mt-16 mb-8"> <p class="text-sm text-slate-500"> Powered by Adzuna API & Azure AI </p> </footer>
+
+</body>
+</html>
