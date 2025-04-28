@@ -16,14 +16,19 @@
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 antialiased">
-    <nav class="bg-white shadow-sm border-b border-slate-200">
+    <nav class="bg-white shadow-sm border-b border-slate-200 sticky top-0 z-10">
         <div class="container mx-auto px-4 max-w-5xl">
             <div class="flex justify-between items-center py-3">
-                <a href="{{ url_for('home') }}" class="text-xl font-bold text-indigo-600">Job Insights</a>
-                <div>
-                    <a href="{{ url_for('home') }}" class="text-sm font-medium text-slate-600 hover:text-indigo-600 mr-4">Search</a>
-                    <a href="{{ url_for('saved_jobs_list') }}" class="text-sm font-medium text-indigo-600 hover:text-indigo-700 mr-4">Saved Jobs</a>
-                    <a href="{{ url_for('logout') }}" class="text-sm font-medium text-slate-600 hover:text-indigo-600">Logout</a>
+                <a href="{{ url_for('home') }}" class="text-xl font-bold text-indigo-600 hover:text-indigo-700 transition-all-ease">Job Insights</a>
+                 <div class="flex items-center space-x-4">
+                    {% if current_user.is_authenticated %}
+                        <a href="{{ url_for('home') }}" class="text-sm font-medium text-slate-600 hover:text-indigo-600 transition-all-ease">Search</a>
+                        <a href="{{ url_for('saved_jobs_list') }}" class="text-sm font-medium text-indigo-600 hover:text-indigo-700 transition-all-ease">Saved Jobs</a>
+                        <a href="{{ url_for('logout') }}" class="text-sm font-medium text-slate-600 hover:text-indigo-600 transition-all-ease">Logout</a>
+                    {% else %}
+                         <a href="{{ url_for('login') }}" class="text-sm font-medium text-slate-600 hover:text-indigo-600 transition-all-ease">Login</a>
+                        <a href="{{ url_for('register') }}" class="text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 rounded-md transition-all-ease">Register</a>
+                    {% endif %}
                 </div>
             </div>
         </div>
