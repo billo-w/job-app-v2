@@ -3,87 +3,77 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Market Pulse</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-
+    <title>Recruiter Job Market Insights</title> {# Updated Title #}
+    <script src="[https://cdn.tailwindcss.com](https://cdn.tailwindcss.com)"></script>
+    <link rel="stylesheet" href="[https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css](https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css)" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="preconnect" href="[https://fonts.googleapis.com](https://fonts.googleapis.com)">
+    <link rel="preconnect" href="[https://fonts.gstatic.com](https://fonts.gstatic.com)" crossorigin>
+    <link href="[https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap](https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap)" rel="stylesheet">
     <style>
-        /* Apply the Inter font */
-        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; /* bg-slate-50 */ }
-        /* Custom styles for flash messages */
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
         .flash-message { border-radius: 0.5rem; padding: 1rem; margin-bottom: 1.5rem; border-left-width: 4px; font-weight: 500; box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.07), 0 1px 2px -1px rgb(0 0 0 / 0.07); }
         .flash-error { background-color: #fef2f2; color: #b91c1c; border-color: #ef4444; }
         .flash-warning { background-color: #fffbeb; color: #b45309; border-color: #f59e0b; }
         .flash-success { background-color: #f0fdf4; color: #15803d; border-color: #22c55e; }
-        /* Add transition for smoother hover effects */
+        .flash-info { background-color: #eff6ff; color: #1d4ed8; border-color: #60a5fa; } /* Added info style */
         .transition-all-ease { transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
-        /* Style for job description clamping */
         .line-clamp-3 { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
-        /* AI Summary Box Styling - Modernized */
         .ai-summary-box { background: linear-gradient(145deg, #f0f9ff 0%, #e0f2fe 100%); border: 1px solid #e0f2fe; border-left-width: 4px; border-left-color: #38bdf8; color: #0c4a6e; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); }
-        /* Styling for Markdown content within AI summary */
-        .ai-summary-content p { margin-bottom: 0.75rem; } /* Add space between paragraphs */
-        .ai-summary-content strong { font-weight: 600; color: #0369a1; } /* Style bold text */
-        .ai-summary-content em { font-style: italic; } /* Style italic text */
+        .ai-summary-content p { margin-bottom: 0.75rem; }
+        .ai-summary-content strong { font-weight: 600; color: #0369a1; }
+        .ai-summary-content em { font-style: italic; }
         .ai-summary-content ul, .ai-summary-content ol { margin-left: 1.25rem; margin-bottom: 0.75rem; }
         .ai-summary-content li { margin-bottom: 0.25rem; }
-        /* Salary Info Box */
         .salary-info-box { background-color: #f0fdfa; border: 1px solid #a7f3d0; border-left-width: 4px; border-left-color: #10b981; color: #065f46; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); }
-        /* Input field focus state */
         input[type="text"]:focus { box-shadow: 0 0 0 2px #c7d2fe; border-color: #6366f1; }
-        /* Button hover/focus state */
         button[type="submit"]:hover { background-color: #4338ca; box-shadow: 0 4px 12px rgba(67, 56, 202, 0.2); }
         button[type="submit"]:focus-visible { outline: 2px solid #a5b4fc; outline-offset: 2px; }
-        /* Job card hover effect */
         .job-card:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.07), 0 4px 6px -4px rgb(0 0 0 / 0.07); }
+        /* Save/Unsave Button Styles */
+        .save-btn { background-color: #10b981; color: white; } .save-btn:hover { background-color: #059669; }
+        .unsave-btn { background-color: #ef4444; color: white; } .unsave-btn:hover { background-color: #dc2626; }
+        .action-btn { padding: 0.3rem 0.6rem; font-size: 0.75rem; border-radius: 0.375rem; font-weight: 500; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 antialiased">
 
-    <div class="container mx-auto px-4 py-10 md:py-16 max-w-5xl">
+    <nav class="bg-white shadow-sm border-b border-slate-200 sticky top-0 z-10">
+        <div class="container mx-auto px-4 max-w-5xl">
+            <div class="flex justify-between items-center py-3">
+                <a href="{{ url_for('home') }}" class="text-xl font-bold text-indigo-600 hover:text-indigo-700 transition-all-ease">Job Insights</a>
+                <div class="flex items-center space-x-4">
+                    {% if current_user.is_authenticated %}
+                        <span class="text-sm text-slate-600">Welcome, {{ current_user.email }}</span>
+                        <a href="{{ url_for('saved_jobs_list') }}" class="text-sm font-medium text-slate-600 hover:text-indigo-600 transition-all-ease">Saved Jobs</a>
+                        <a href="{{ url_for('logout') }}" class="text-sm font-medium text-slate-600 hover:text-indigo-600 transition-all-ease">Logout</a>
+                    {% else %}
+                        <a href="{{ url_for('login') }}" class="text-sm font-medium text-slate-600 hover:text-indigo-600 transition-all-ease">Login</a>
+                        <a href="{{ url_for('register') }}" class="text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 rounded-md transition-all-ease">Register</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </nav>
+    <div class="container mx-auto px-4 py-10 md:py-12 max-w-5xl">
 
         <header class="text-center mb-12 md:mb-16">
-            <div class="inline-block bg-gradient-to-br from-indigo-500 to-purple-500 text-white p-4 rounded-full mb-5 shadow-lg">
-                 <i class="fas fa-magnifying-glass-chart fa-2x"></i>
-            </div>
-            <h1 class="text-3xl sm:text-4xl lg:text-5xl font-bold text-slate-900 tracking-tight">Market Pulse</h1>
-            <p class="text-slate-600 mt-3 text-lg max-w-xl mx-auto">Analyze job volume, salary trends, and potential skills.</p>
+             <div class="inline-block bg-gradient-to-br from-indigo-500 to-purple-500 text-white p-4 rounded-full mb-5 shadow-lg"> <i class="fas fa-magnifying-glass-chart fa-2x"></i> </div>
+             <h1 class="text-3xl sm:text-4xl lg:text-5xl font-bold text-slate-900 tracking-tight">Recruiter Job Market Insights</h1>
+             <p class="text-slate-600 mt-3 text-lg max-w-xl mx-auto">Analyze job volume, salary trends, and potential skills with Adzuna & AI.</p>
         </header>
 
         {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                <div class="max-w-3xl mx-auto">
-                {% for category, message in messages %}
-                    <div class="flash-message flash-{{ category | default('info') }}">{{ message }}</div>
-                {% endfor %}
-                </div>
-            {% endif %}
+            {% if messages %} <div class="max-w-3xl mx-auto"> {% for category, message in messages %} <div class="flash-message flash-{{ category | default('info') }}">{{ message }}</div> {% endfor %} </div> {% endif %}
         {% endwith %}
 
         <div class="bg-white p-6 md:p-8 rounded-xl shadow-lg mb-12 md:mb-16 border border-slate-200/80">
             <form action="{{ url_for('get_insights') }}" method="POST" class="space-y-6">
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div>
-                        <label for="what" class="block text-sm font-medium text-slate-700 mb-1.5">Job Title / Keywords</label>
-                        <input type="text" name="what" id="what" required value="{{ form_data.get('what', '') }}" class="w-full px-4 py-2.5 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all-ease text-sm" placeholder="e.g., data scientist">
-                    </div>
-                    <div>
-                        <label for="where" class="block text-sm font-medium text-slate-700 mb-1.5">Location</label>
-                        <input type="text" name="where" id="where" required value="{{ form_data.get('where', '') }}" class="w-full px-4 py-2.5 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all-ease text-sm" placeholder="e.g., london, san francisco">
-                    </div>
-                    <div>
-                        <label for="country" class="block text-sm font-medium text-slate-700 mb-1.5">Country Code (2 letters)</label>
-                        <input type="text" name="country" id="country" required maxlength="2" minlength="2" pattern="[a-zA-Z]{2}" title="Enter 2-letter country code (e.g., gb, us)" value="{{ form_data.get('country', '') }}" class="w-full px-4 py-2.5 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all-ease text-sm" placeholder="e.g., gb, us, de">
-                    </div>
+                    <div> <label for="what" class="block text-sm font-medium text-slate-700 mb-1.5">Job Title / Keywords</label> <input type="text" name="what" id="what" required value="{{ form_data.get('what', '') }}" class="w-full px-4 py-2.5 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all-ease text-sm" placeholder="e.g., data scientist"> </div>
+                    <div> <label for="where" class="block text-sm font-medium text-slate-700 mb-1.5">Location</label> <input type="text" name="where" id="where" required value="{{ form_data.get('where', '') }}" class="w-full px-4 py-2.5 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all-ease text-sm" placeholder="e.g., london, san francisco"> </div>
+                    <div> <label for="country" class="block text-sm font-medium text-slate-700 mb-1.5">Country Code (2 letters)</label> <input type="text" name="country" id="country" required maxlength="2" minlength="2" pattern="[a-zA-Z]{2}" title="Enter 2-letter country code (e.g., gb, us)" value="{{ form_data.get('country', '') }}" class="w-full px-4 py-2.5 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all-ease text-sm" placeholder="e.g., gb, us, de"> </div>
                 </div>
-                <div class="text-center pt-3">
-                    <button type="submit" class="inline-flex items-center justify-center py-3 px-10 border border-transparent shadow-md text-base font-semibold rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-500 transition-all-ease transform hover:-translate-y-0.5">
-                        <i class="fas fa-search mr-2 -ml-1 h-5 w-5"></i> Analyze Market
-                    </button>
-                </div>
+                <div class="text-center pt-3"> <button type="submit" class="inline-flex items-center justify-center py-3 px-10 border border-transparent shadow-md text-base font-semibold rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-500 transition-all-ease transform hover:-translate-y-0.5"> <i class="fas fa-search mr-2 -ml-1 h-5 w-5"></i> Analyze Market </button> </div>
             </form>
         </div>
 
@@ -97,24 +87,22 @@
             {% if insights.salary_data %}
             <div class="salary-info-box p-6 rounded-lg">
                  <h3 class="text-lg font-semibold mb-2.5 flex items-center text-emerald-800"> <i class="fa-solid fa-sack-dollar mr-2.5 text-emerald-600 fa-lg"></i> Salary Insights (Estimated) </h3>
-                {% if insights.salary_data.average %}
-                    <p class="text-sm leading-relaxed"> Estimated average salary based on available listings: <strong class="text-lg font-semibold">{{ "{:,.0f}".format(insights.salary_data.average) }}</strong> <span class="text-xs text-emerald-700"> (Currency based on country: {{ insights.query.country.upper() }})</span> </p>
-                    <p class="text-xs text-emerald-700 mt-1">Note: Based on Adzuna's histogram data; may not represent all roles.</p>
-                {% elif insights.salary_data.histogram %} <p class="text-sm leading-relaxed">Salary distribution data found, but an average could not be calculated.</p>
-                {% else %} <p class="text-sm leading-relaxed">Salary data could not be retrieved for this specific query.</p> {% endif %}
+                {% if insights.salary_data.average %} <p class="text-sm leading-relaxed"> Estimated average salary: <strong class="text-lg font-semibold">{{ "{:,.0f}".format(insights.salary_data.average) }}</strong> <span class="text-xs text-emerald-700"> ({{ insights.query.country.upper() }})</span> </p> <p class="text-xs text-emerald-700 mt-1">Note: Based on Adzuna's histogram data.</p>
+                {% elif insights.salary_data.histogram %} <p class="text-sm leading-relaxed">Salary distribution data found, but average could not be calculated.</p>
+                {% else %} <p class="text-sm leading-relaxed">Salary data unavailable.</p> {% endif %}
             </div>
             {% endif %}
-            {% if insights.ai_summary_html %} {# Check for the HTML version #}
+
+            {% if insights.ai_summary_html %}
             <div class="ai-summary-box p-6 rounded-lg">
                 <h3 class="text-lg font-semibold mb-2.5 flex items-center text-sky-900"> <i class="fa-solid fa-user-tie mr-2.5 text-sky-500 fa-lg"></i> AI Recruitment Analysis </h3>
-                <div class="text-sm leading-relaxed ai-summary-content"> {# Added wrapper div with class #}
-                    {{ insights.ai_summary_html }} {# Renders the HTML directly #}
-                </div>
+                <div class="text-sm leading-relaxed ai-summary-content"> {{ insights.ai_summary_html }} </div>
             </div>
             {% endif %}
+
             {% if insights.job_listings %}
                 <div>
-                    <h3 class="text-xl font-semibold text-slate-700 mb-5 text-center md:text-left">Job Listings</h3>
+                    <h3 class="text-xl font-semibold text-slate-700 mb-5 text-center md:text-left">Sample Job Listings</h3>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {% for job in insights.job_listings %}
                         <div class="job-card bg-white border border-slate-200/80 p-5 rounded-lg shadow-sm transition-all-ease flex flex-col justify-between">
@@ -128,7 +116,30 @@
                             </div>
                             <div class="flex justify-between items-center mt-3 pt-4 border-t border-slate-100">
                                 <p class="text-xs text-slate-500"> <i class="fa-regular fa-clock mr-1"></i> Posted: {{ job.created.split('T')[0] }} </p>
-                                <a href="{{ job.url }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center text-sm text-indigo-600 hover:text-indigo-800 font-medium transition-all-ease group"> View Job <i class="fas fa-arrow-right text-xs ml-1.5 group-hover:translate-x-0.5 transition-transform"></i> </a>
+                                <div class="flex items-center space-x-2">
+                                    {% if current_user.is_authenticated %}
+                                        {% if job.adzuna_job_id in saved_job_ids %}
+                                            <form action="{{ url_for('unsave_job') }}" method="POST" class="inline">
+                                                <input type="hidden" name="adzuna_job_id" value="{{ job.adzuna_job_id }}">
+                                                <button type="submit" class="action-btn unsave-btn transition-all-ease" title="Remove from saved jobs">
+                                                    <i class="fas fa-bookmark"></i> Saved
+                                                </button>
+                                            </form>
+                                        {% else %}
+                                            <form action="{{ url_for('save_job') }}" method="POST" class="inline">
+                                                <input type="hidden" name="adzuna_job_id" value="{{ job.adzuna_job_id }}">
+                                                <input type="hidden" name="title" value="{{ job.title }}">
+                                                <input type="hidden" name="company" value="{{ job.company }}">
+                                                <input type="hidden" name="location" value="{{ job.location }}">
+                                                <input type="hidden" name="adzuna_url" value="{{ job.url }}">
+                                                <button type="submit" class="action-btn save-btn transition-all-ease" title="Save this job">
+                                                    <i class="far fa-bookmark"></i> Save
+                                                </button>
+                                            </form>
+                                        {% endif %}
+                                    {% endif %}
+                                    <a href="{{ job.url }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center text-sm text-indigo-600 hover:text-indigo-800 font-medium transition-all-ease group"> View Job <i class="fas fa-arrow-right text-xs ml-1.5 group-hover:translate-x-0.5 transition-transform"></i> </a>
+                                </div>
                             </div>
                         </div>
                         {% endfor %}
@@ -137,14 +148,15 @@
             {% else %}
                 <div class="bg-white p-8 rounded-lg shadow-sm text-center text-slate-500 border border-slate-200/80"> <i class="fas fa-inbox fa-2x text-slate-400 mb-4"></i> <p class="font-medium">No specific job listings found.</p> <p class="text-sm">Try broadening your search terms or checking the location.</p> </div>
             {% endif %}
-            </section>
+
+        </section>
         {% elif request.method == 'POST' %}
          <div id="results-placeholder" class="bg-amber-50 border border-amber-200 p-6 rounded-lg shadow-sm text-center text-amber-800"> <i class="fas fa-exclamation-triangle fa-lg mr-2"></i> No results found or an error occurred. Please check messages or refine your search. </div>
         {% endif %}
 
     </div>
 
-    <footer class="text-center mt-16 mb-8"> <p class="text-sm text-slate-500"> Powered by <a href="https://developer.adzuna.com/" target="_blank" rel="noopener noreferrer" class="text-indigo-600 hover:underline font-medium">Adzuna API</a> & Azure AI </p> </footer>
+    <footer class="text-center mt-16 mb-8"> <p class="text-sm text-slate-500"> Powered by <a href="[https://developer.adzuna.com/](https://developer.adzuna.com/)" target="_blank" rel="noopener noreferrer" class="text-indigo-600 hover:underline font-medium">Adzuna API</a> & Azure AI </p> </footer>
 
 </body>
 </html>
