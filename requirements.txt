@@ -3,3 +3,10 @@ requests>=2.25
 python-dotenv>=0.15
 gunicorn
 Markdown>=3.3
+Flask-SQLAlchemy>=2.5 # For database ORM
+psycopg2-binary>=2.9 # PostgreSQL adapter
+Flask-Migrate>=3.1 # For database migrations
+Flask-Login>=0.5 # For user session management
+Flask-WTF>=1.0 # For web forms
+Werkzeug>=2.0 # For password hashing (usually included with Flask)
+email-validator>=1.1 # For email validation in forms
