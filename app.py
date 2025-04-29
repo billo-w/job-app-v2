@@ -105,9 +105,7 @@ class LoginForm(FlaskForm):
     submit = SubmitField('Login')
 
 # --- Helper Functions (Adzuna, AI, Data Fetching) ---
-# Keep get_salary_histogram, get_ai_summary, extract_adzuna_job_id,
-# and fetch_market_insights functions as they were.
-# (Code omitted for brevity, assume they are present and correct)
+
 def get_salary_histogram(country_code, location, job_title):
     """ Fetches salary histogram data from Adzuna. """
     if not ADZUNA_APP_ID or not ADZUNA_APP_KEY: return None
@@ -139,7 +137,6 @@ def get_salary_histogram(country_code, location, job_title):
             return None
     except requests.exceptions.Timeout:
         app.logger.error("Adzuna histogram request timed out.")
-        # Avoid flashing here for AJAX, return None or specific error info
         return None
     except requests.exceptions.HTTPError as e:
         app.logger.error(f"Adzuna histogram HTTP Error: {e.response.status_code}.")
@@ -158,13 +155,12 @@ def get_ai_summary(query_details, total_jobs, job_listings_sample, salary_data):
         app.logger.warning("Azure AI credentials not configured. Skipping AI summary.")
         return None
 
-    sample_titles = [job['title'] for job in job_listings_sample[:7]] # Limit sample size
-    # Ensure description is a string before joining
+    sample_titles = [job['title'] for job in job_listings_sample[:7]]
     sample_descriptions = " ".join([
         job['description'] for job in job_listings_sample[:5]
         if isinstance(job.get('description'), str)
     ])
-    max_desc_length = 1000 # Limit description length for prompt
+    max_desc_length = 1000
     if len(sample_descriptions) > max_desc_length:
         sample_descriptions = sample_descriptions[:max_desc_length] + "..."
 
@@ -175,6 +171,7 @@ def get_ai_summary(query_details, total_jobs, job_listings_sample, salary_data):
         salary_info = "Distribution data available, but average could not be calculated."
 
     system_message = ("You are an AI assistant providing recruitment market analysis. Focus on actionable insights for a recruiter based *only* on the provided data. Use Markdown for formatting (like **bold**).")
+    # --- MODIFIED PROMPT ---
     user_prompt = (
         f"Analyze the job market for a recruiter hiring for '{query_details['what']}' in '{query_details['where']}, {query_details['country'].upper()}'.\n\n"
         f"**Market Data:**\n"
@@ -184,15 +181,16 @@ def get_ai_summary(query_details, total_jobs, job_listings_sample, salary_data):
         f"- Sample Job Description Excerpts: {sample_descriptions if sample_descriptions else 'N/A'}\n\n"
         f"**Recruiter Analysis (Based *only* on above data - use Markdown for emphasis):**\n"
         f"1.  **Market Activity & Competitiveness:** Based on job volume and salary data (if available), how active/competitive does this market seem?\n"
-        f"2.  **Key Skills/Keywords:** Based *only* on the sample titles and descriptions, what 2-3 potential key skills or technologies seem commonly required?\n"
+        f"2.  **Specific Skills/Keywords Mentioned:** List the specific skills, technologies, tools, or qualifications explicitly mentioned in the sample job titles and descriptions provided above. Do not generalize or infer skills not present in the text.\n" # Changed instruction here
         f"3.  **Candidate Pool & Sourcing:** What does the job volume suggest about the likely candidate pool size and the potential need for proactive sourcing vs. relying on applications?\n\n"
         f"Provide a concise, bulleted summary. Do not invent skills or salary details not present in the data."
     )
+    # --- END MODIFIED PROMPT ---
 
     payload = {
         "messages": [{"role": "system", "content": system_message}, {"role": "user", "content": user_prompt}],
-        "max_tokens": 250, # Adjust as needed
-        "temperature": 0.5
+        "max_tokens": 300, # Slightly increased tokens in case skill list is longer
+        "temperature": 0.4 # Slightly lower temperature to encourage factual listing
     }
     headers = {
         'Content-Type': 'application/json',
@@ -216,7 +214,6 @@ def get_ai_summary(query_details, total_jobs, job_listings_sample, salary_data):
             return None
     except requests.exceptions.Timeout:
         app.logger.error("Azure AI request timed out.")
-        # Avoid flashing here for AJAX
         return None
     except requests.exceptions.HTTPError as e:
         app.logger.error(f"Azure AI HTTP Error: {e.response.status_code}.")
