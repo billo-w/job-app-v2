@@ -4,29 +4,54 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ title }} - Job Insights</title>
-    <script src="[https://cdn.tailwindcss.com](https://cdn.tailwindcss.com)"></script>
-    <link rel="preconnect" href="[https://fonts.googleapis.com](https://fonts.googleapis.com)">
-    <link rel="preconnect" href="[https://fonts.gstatic.com](https://fonts.gstatic.com)" crossorigin>
-    <link href="[https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap](https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap)" rel="stylesheet">
-     <style>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <style>
         body { font-family: 'Inter', sans-serif; background-color: #f8fafc; /* bg-slate-50 */ }
         .flash-message { border-radius: 0.5rem; padding: 1rem; margin-bottom: 1.5rem; border-left-width: 4px; font-weight: 500; box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.07), 0 1px 2px -1px rgb(0 0 0 / 0.07); }
         .flash-error { background-color: #fef2f2; color: #b91c1c; border-color: #ef4444; }
         .flash-success { background-color: #f0fdf4; color: #15803d; border-color: #22c55e; }
         .flash-info { background-color: #eff6ff; color: #1d4ed8; border-color: #60a5fa; }
-        input[type="email"]:focus, input[type="password"]:focus { box-shadow: 0 0 0 2px #c7d2fe; border-color: #6366f1; }
-        button[type="submit"]:hover { background-color: #4338ca; }
+        /* Custom focus styles for better visibility */
+        input[type="email"]:focus, input[type="password"]:focus {
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.3); /* Indigo focus ring */
+            border-color: #6366f1; /* Indigo border */
+        }
+        /* Custom button styles */
+        button[type="submit"] { transition: all 0.15s ease-in-out; }
+        button[type="submit"]:hover { background-color: #4338ca; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(67, 56, 202, 0.2); }
         button[type="submit"]:focus-visible { outline: 2px solid #a5b4fc; outline-offset: 2px; }
+        /* Job card hover effect */
+        .job-card:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.07), 0 4px 6px -4px rgb(0 0 0 / 0.07); }
+        .transition-all-ease { transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
+        /* Unsave Button Style */
+        .unsave-btn { color: #ef4444; } .unsave-btn:hover { color: #dc2626; }
+        /* AI Summary Box */
+        .ai-summary-box { background: linear-gradient(145deg, #f0f9ff 0%, #e0f2fe 100%); border: 1px solid #e0f2fe; border-left-width: 4px; border-left-color: #38bdf8; color: #0c4a6e; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); }
+        .ai-summary-content p { margin-bottom: 0.75rem; }
+        .ai-summary-content strong { font-weight: 600; color: #0369a1; }
+        .ai-summary-content em { font-style: italic; }
+        .ai-summary-content ul, .ai-summary-content ol { margin-left: 1.25rem; margin-bottom: 0.75rem; }
+        .ai-summary-content li { margin-bottom: 0.25rem; }
+        /* Salary Info Box */
+        .salary-info-box { background-color: #f0fdfa; border: 1px solid #a7f3d0; border-left-width: 4px; border-left-color: #10b981; color: #065f46; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); }
+        /* Save/Unsave Button Styles */
+        .save-btn { background-color: #10b981; color: white; } .save-btn:hover { background-color: #059669; }
+        .unsave-btn { background-color: #ef4444; color: white; } .unsave-btn:hover { background-color: #dc2626; }
+        .action-btn { padding: 0.3rem 0.6rem; font-size: 0.75rem; border-radius: 0.375rem; font-weight: 500; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 antialiased">
     <div class="flex flex-col min-h-screen">
-         <header class="py-4 text-center border-b border-slate-200 bg-white">
-             <a href="{{ url_for('home') }}" class="text-2xl font-bold text-indigo-600 hover:text-indigo-700">Job Insights</a>
+        <header class="py-4 text-center border-b border-slate-200 bg-white shadow-sm">
+             <a href="{{ url_for('home') }}" class="text-2xl font-bold text-indigo-600 hover:text-indigo-700 transition-colors duration-200">Job Insights</a>
         </header>
 
         <main class="flex-grow container mx-auto px-4 py-12 md:py-16 max-w-md">
-            <h1 class="text-3xl font-bold text-center text-slate-800 mb-8">Login to Your Account</h1>
+            <h1 class="text-3xl font-bold text-center text-slate-800 mb-8">Welcome Back!</h1>
 
             {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
@@ -41,31 +66,49 @@
             <div class="bg-white p-8 rounded-xl shadow-lg border border-slate-200/80">
                 <form method="POST" action="{{ url_for('login') }}" novalidate>
                     {{ form.hidden_tag() }} {# Required for CSRF protection #}
+
                     <div class="mb-5">
                         {{ form.email.label(class="block text-sm font-medium text-slate-700 mb-1.5") }}
-                        {{ form.email(class="w-full px-4 py-2.5 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm", placeholder="you@example.com") }}
+                        {{ form.email(class="w-full px-4 py-2.5 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition duration-150 ease-in-out text-sm", placeholder="you@example.com", required=true, autofocus=true) }}
                         {% for error in form.email.errors %}
-                            <p class="text-red-600 text-xs mt-1">{{ error }}</p>
+                            <p class="text-red-600 text-xs mt-1.5 flex items-center">
+                                <i class="fas fa-exclamation-circle mr-1.5 text-xs"></i>{{ error }}
+                            </p>
                         {% endfor %}
                     </div>
-                    <div class="mb-6">
+
+                    <div class="mb-4"> {# Reduced margin slightly #}
                         {{ form.password.label(class="block text-sm font-medium text-slate-700 mb-1.5") }}
-                        {{ form.password(class="w-full px-4 py-2.5 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm") }}
+                        {{ form.password(class="w-full px-4 py-2.5 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition duration-150 ease-in-out text-sm", placeholder="Enter your password", required=true) }}
                          {% for error in form.password.errors %}
-                            <p class="text-red-600 text-xs mt-1">{{ error }}</p>
+                             <p class="text-red-600 text-xs mt-1.5 flex items-center">
+                                <i class="fas fa-exclamation-circle mr-1.5 text-xs"></i>{{ error }}
+                            </p>
                         {% endfor %}
                     </div>
+
+                    <div class="flex items-center justify-between mb-6 text-sm">
+                        <div class="flex items-center">
+                            {% if form.remember %} {# Check if remember field exists in the form #}
+                                {{ form.remember(class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-slate-300 rounded mr-2") }}
+                                {{ form.remember.label(class="text-slate-700") }}
+                            {% endif %}
+                        </div>
+                        <a href="#" class="font-medium text-indigo-600 hover:text-indigo-500">Forgot password?</a> {# Placeholder link #}
+                    </div>
+
                     <div class="text-center pt-2">
-                         {{ form.submit(class="w-full py-3 px-6 border border-transparent rounded-lg shadow-md text-base font-semibold text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-500 cursor-pointer transform transition-all duration-150 ease-in-out hover:-translate-y-0.5") }}
+                         {{ form.submit(class="w-full inline-flex items-center justify-center py-3 px-6 border border-transparent rounded-lg shadow-md text-base font-semibold text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-500 cursor-pointer") }}
                     </div>
                 </form>
             </div>
-             <p class="text-center text-sm text-slate-600 mt-6">
+
+            <p class="text-center text-sm text-slate-600 mt-6">
                 Need an account? <a href="{{ url_for('register') }}" class="font-medium text-indigo-600 hover:text-indigo-500">Register here</a>
             </p>
         </main>
 
-         <footer class="text-center py-6 mt-auto">
+        <footer class="text-center py-6 mt-auto border-t border-slate-200 bg-white">
             <p class="text-sm text-slate-500">Powered by Adzuna API & Azure AI</p>
         </footer>
     </div>
