@@ -342,13 +342,18 @@ def save_job():
             db.session.rollback()
             app.logger.error(f"Error saving job {adzuna_job_id} for user {current_user.id}: {e}")
             flash('Error saving job. Please try again.', 'error')
-    referrer_url = request.referrer
-    redirect_target = referrer_url or url_for('home')
-    app.logger.info(f"Save successful. Referrer: '{referrer_url}'. Redirecting to: '{redirect_target}'")
-    # --- End Logging ---
 
-    # Redirect back to the page the user came from
-    return redirect(request.referrer or url_for('home'))
+    try:
+        db.session.commit()
+        flash('Job saved successfully!', 'success')
+    except Exception as e:
+       # ... error handling ...
+       pass # Make sure it still tries to redirect even on error if appropriate
+
+    # --- Temporary Change ---
+    app.logger.info("Save processed. Forcing redirect to home.")
+    return redirect(url_for('home'))
+    # --- End Temporary Change --- #
 
 
 @app.route('/unsave_job', methods=['POST'])
