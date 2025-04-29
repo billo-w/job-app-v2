@@ -142,13 +142,13 @@ def get_lightcast_token():
 
     try:
         response = requests.post(LIGHTCAST_AUTH_URL, data=payload, headers=headers, timeout=10)
-        response.raise_for_status()
+        response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
         data = response.json()
         access_token = data.get("access_token")
         expires_in = data.get("expires_in", 3600) # Default to 1 hour if not provided
 
         if not access_token:
-            app.logger.error("Failed to get access_token from Lightcast response.")
+            app.logger.error(f"Failed to get access_token from Lightcast response. Data: {data}")
             return None
 
         # Update cache
@@ -157,8 +157,11 @@ def get_lightcast_token():
         app.logger.info("Successfully obtained and cached new Lightcast token.")
         return access_token
 
+    except requests.exceptions.HTTPError as e:
+        app.logger.error(f"HTTP Error requesting Lightcast token: {e.response.status_code} - Response: {e.response.text}")
+        return None
     except requests.exceptions.RequestException as e:
-        app.logger.error(f"Error requesting Lightcast token: {e}")
+        app.logger.error(f"Network Error requesting Lightcast token: {e}")
         return None
     except Exception as e:
          app.logger.error(f"Unexpected error getting Lightcast token: {e}")
@@ -173,7 +176,6 @@ def get_lightcast_skills(job_title):
     access_token = get_lightcast_token()
     if not access_token:
         app.logger.error("Cannot fetch Lightcast skills without access token.")
-        # Avoid flashing here, let fetch_market_insights handle overall errors
         return None
 
     headers = {'Authorization': f'Bearer {access_token}'}
@@ -186,18 +188,23 @@ def get_lightcast_skills(job_title):
     app.logger.info(f"Normalizing job title '{job_title}' with Lightcast.")
     try:
         response = requests.get(normalize_url, headers=headers, params=normalize_params, timeout=10)
-        response.raise_for_status()
+        response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
         normalize_data = response.json()
 
         if normalize_data and 'data' in normalize_data and normalize_data['data']:
             normalized_title_id = normalize_data['data'][0].get('id')
             app.logger.info(f"Normalized '{job_title}' to Lightcast ID: {normalized_title_id}")
         else:
-            app.logger.warning(f"Could not normalize job title '{job_title}' via Lightcast.")
+            # Log the actual response if normalization is empty but successful (status 200)
+            app.logger.warning(f"Could not normalize job title '{job_title}' via Lightcast (empty data). Response: {normalize_data}")
             return None # Cannot proceed without ID
 
+    except requests.exceptions.HTTPError as e:
+        # Log specific HTTP errors, including the response text for debugging
+        app.logger.error(f"HTTP Error normalizing Lightcast title: {e.response.status_code} for URL {response.url}. Response: {e.response.text}")
+        return None
     except requests.exceptions.RequestException as e:
-        app.logger.error(f"Error normalizing Lightcast title: {e}")
+        app.logger.error(f"Network Error normalizing Lightcast title: {e}")
         return None
     except Exception as e:
          app.logger.error(f"Unexpected error during Lightcast title normalization: {e}")
@@ -208,13 +215,12 @@ def get_lightcast_skills(job_title):
         return None
 
     details_url = f"{LIGHTCAST_API_BASE_URL}/titles/{normalized_title_id}"
-    # Include 'fields=mapping' to ensure skills are returned
-    details_params = {'fields': 'mapping'}
+    details_params = {'fields': 'mapping'} # Include 'fields=mapping' to ensure skills are returned
 
     app.logger.info(f"Fetching skills for Lightcast ID: {normalized_title_id}")
     try:
         response = requests.get(details_url, headers=headers, params=details_params, timeout=10)
-        response.raise_for_status()
+        response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
         details_data = response.json()
 
         if details_data and 'data' in details_data and 'mapping' in details_data['data'] and 'skills' in details_data['data']['mapping']:
@@ -222,11 +228,15 @@ def get_lightcast_skills(job_title):
             app.logger.info(f"Found {len(skills_list)} skills for '{job_title}' (ID: {normalized_title_id})")
             return skills_list[:15] # Return top 15 skills for brevity
         else:
-            app.logger.warning(f"No skills found in Lightcast mapping for ID: {normalized_title_id}")
+            app.logger.warning(f"No skills found in Lightcast mapping for ID: {normalized_title_id}. Response: {details_data}")
             return None
 
+    except requests.exceptions.HTTPError as e:
+         # Log specific HTTP errors, including the response text for debugging
+        app.logger.error(f"HTTP Error fetching Lightcast title details: {e.response.status_code} for URL {response.url}. Response: {e.response.text}")
+        return None
     except requests.exceptions.RequestException as e:
-        app.logger.error(f"Error fetching Lightcast title details/skills: {e}")
+        app.logger.error(f"Network Error fetching Lightcast title details: {e}")
         return None
     except Exception as e:
          app.logger.error(f"Unexpected error fetching Lightcast skills: {e}")
@@ -267,7 +277,8 @@ def get_salary_histogram(country_code, location, job_title):
         app.logger.error("Adzuna histogram request timed out.")
         return None
     except requests.exceptions.HTTPError as e:
-        app.logger.error(f"Adzuna histogram HTTP Error: {e.response.status_code}.")
+        # Log Adzuna 400 error response for debugging if needed
+        app.logger.error(f"Adzuna histogram HTTP Error: {e.response.status_code}. Response: {e.response.text}")
         return None
     except requests.exceptions.RequestException as e:
         app.logger.error(f"Adzuna histogram connection error: {e}")
@@ -483,31 +494,39 @@ def fetch_market_insights(what, where, country):
 
 @app.route('/')
 def home():
-    """ Renders the main search page or results based on GET parameters. """
+    """
+    Renders the main search page or results based on GET parameters.
+    """
+    # Use .get(key, '') to provide default empty string if key is missing
     what = request.args.get('what', '')
     where = request.args.get('where', '')
     country = request.args.get('country', '')
-    form_data = {'what': what, 'where': where, 'country': country}
+    form_data = {'what': what, 'where': where, 'country': country} # For pre-filling form
 
     insights_data = None
     saved_job_ids = set()
 
-    if what and where and country:
+    # If search parameters are present (and not empty strings), fetch insights
+    if what and where and country: # Check if values are truthy
         app.logger.info(f"Home route received search parameters: {form_data}")
         insights_data = fetch_market_insights(what, where, country)
+        # insights_data will be None if fetch_market_insights encountered an error and flashed a message
 
+    # Get saved job IDs for the current user regardless of search
     if current_user.is_authenticated:
         saved_job_ids = {job.adzuna_job_id for job in current_user.saved_jobs}
 
     return render_template('index.html',
                            insights=insights_data,
-                           form_data=form_data,
+                           form_data=form_data, # Pass form_data to pre-fill search boxes
                            saved_job_ids=saved_job_ids)
 
 
 @app.route('/insights', methods=['POST'])
 def get_insights():
-    """ Handles the POST from the search form (PRG Pattern). """
+    """
+    Handles the POST from the search form (PRG Pattern).
+    """
     what = request.form.get('what')
     where = request.form.get('where')
     country = request.form.get('country')
@@ -579,7 +598,7 @@ def logout():
     flash('You have been logged out.', 'success')
     return redirect(url_for('home'))
 
-# --- Saved Jobs Routes (AJAX Handlers + Form Handler) ---
+# --- Saved Jobs Routes ---
 # (save_job and unsave_job remain the same - omitted for brevity)
 @app.route('/save_job', methods=['POST'])
 @login_required
@@ -702,7 +721,6 @@ def unsave_job():
         else:
             flash(message, 'warning')
             return redirect(url_for('saved_jobs_list')) # Redirect back for form
-
 
 # --- Saved Jobs Page Route ---
 @app.route('/saved_jobs')
