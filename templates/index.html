@@ -29,6 +29,7 @@
 
     <div class="bg-white p-6 md:p-8 rounded-xl shadow-lg mb-12 md:mb-16 border border-slate-200/80">
         <form action="{{ url_for('get_insights') }}" method="POST" class="space-y-6">
+             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
                     <label for="what" class="block text-sm font-medium text-slate-700 mb-1.5">Job Title / Keywords</label>

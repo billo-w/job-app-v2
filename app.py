@@ -347,16 +347,17 @@ def home():
     Renders the main search page.
     If search parameters are provided via GET, fetches and displays results.
     """
-    what = request.args.get('what')
-    where = request.args.get('where')
-    country = request.args.get('country')
+    # Use .get(key, '') to provide default empty string if key is missing
+    what = request.args.get('what', '')
+    where = request.args.get('where', '')
+    country = request.args.get('country', '')
     form_data = {'what': what, 'where': where, 'country': country} # For pre-filling form
 
     insights_data = None
     saved_job_ids = set()
 
-    # If search parameters are present, fetch insights
-    if all([what, where, country]):
+    # If search parameters are present (and not empty strings), fetch insights
+    if what and where and country: # Check if values are truthy
         app.logger.info(f"Home route received search parameters: {form_data}")
         insights_data = fetch_market_insights(what, where, country)
         # insights_data will be None if fetch_market_insights encountered an error and flashed a message
@@ -365,14 +366,10 @@ def home():
     if current_user.is_authenticated:
         saved_job_ids = {job.adzuna_job_id for job in current_user.saved_jobs}
 
-    # Generate CSRF token if needed explicitly (Flask-WTF usually handles it)
-    # csrf_token_value = generate_csrf()
-
     return render_template('index.html',
                            insights=insights_data,
                            form_data=form_data, # Pass form_data to pre-fill search boxes
                            saved_job_ids=saved_job_ids)
-                           # csrf_token=csrf_token_value) # Pass token if needed explicitly
 
 
 @app.route('/insights', methods=['POST'])
