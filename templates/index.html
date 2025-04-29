@@ -86,6 +86,22 @@
         </div>
         {% endif %}
 
+        {% if insights.common_skills %}
+        <div class="bg-purple-50 border border-purple-200 border-l-4 border-l-purple-500 text-purple-900 p-6 rounded-lg shadow-sm">
+             <h3 class="text-lg font-semibold mb-2.5 flex items-center text-purple-800">
+                 <i class="fas fa-cogs mr-2.5 text-purple-600 fa-lg"></i> Commonly Associated Skills (via Lightcast)
+             </h3>
+             <div class="flex flex-wrap gap-2">
+                 {% for skill in insights.common_skills %}
+                 <span class="inline-block bg-purple-100 text-purple-800 text-xs font-medium px-2.5 py-0.5 rounded-full border border-purple-200">
+                     {{ skill }}
+                 </span>
+                 {% endfor %}
+             </div>
+             <p class="text-xs text-purple-600 mt-3">Note: Based on standardized job title analysis.</p>
+        </div>
+        {% endif %}
+
         {% if insights.ai_summary_html %}
         <div class="ai-summary-box p-6 rounded-lg">
             <h3 class="text-lg font-semibold mb-2.5 flex items-center text-sky-900">
@@ -284,4 +300,5 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 </script>
 {% endblock %}
+
 

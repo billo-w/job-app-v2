@@ -1,13 +1,14 @@
 import os
 import requests
+import time # Import time for token expiry
 from flask import (Flask, request, jsonify, render_template, flash, redirect,
-                   url_for, session) # Added jsonify
+                   url_for, session)
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_login import (LoginManager, UserMixin, login_user, logout_user,
                          login_required, current_user)
 from flask_wtf import FlaskForm
-from flask_wtf.csrf import CSRFProtect, generate_csrf # Import CSRFProtect and generate_csrf
+from flask_wtf.csrf import CSRFProtect, generate_csrf
 from wtforms import StringField, PasswordField, SubmitField, BooleanField
 from wtforms.validators import DataRequired, Email, EqualTo, Length, ValidationError
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -28,27 +29,37 @@ app = Flask(__name__, template_folder='templates')
 app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'a_very_secret_dev_key')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SQLALCHEMY_ECHO'] = False # Set to True for debugging SQL queries
-# Optional: Configure WTF_CSRF_ENABLED (default is True)
-# app.config['WTF_CSRF_ENABLED'] = True
+app.config['SQLALCHEMY_ECHO'] = False
 
 # --- Extensions Initialization ---
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 login_manager = LoginManager(app)
-csrf = CSRFProtect(app) # Initialize CSRF protection
+csrf = CSRFProtect(app)
 login_manager.login_view = 'login'
 login_manager.login_message_category = 'info'
 
-# --- Adzuna & AI Configuration ---
+# --- API Configuration ---
 ADZUNA_APP_ID = os.getenv('ADZUNA_APP_ID')
 ADZUNA_APP_KEY = os.getenv('ADZUNA_APP_KEY')
 ADZUNA_API_BASE_URL = 'https://api.adzuna.com/v1/api/jobs'
 RESULTS_PER_PAGE = 20
 AZURE_AI_ENDPOINT = os.getenv('AZURE_AI_ENDPOINT')
 AZURE_AI_KEY = os.getenv('AZURE_AI_KEY')
+# Lightcast Config
+LIGHTCAST_CLIENT_ID = os.getenv('LIGHTCAST_CLIENT_ID')
+LIGHTCAST_CLIENT_SECRET = os.getenv('LIGHTCAST_CLIENT_SECRET')
+LIGHTCAST_AUTH_URL = 'https://auth.emsicloud.com/connect/token'
+LIGHTCAST_API_BASE_URL = 'https://emsiservices.com' # Base URL for titles API
+
+# --- Simple In-Memory Cache for Lightcast Token ---
+lightcast_token_cache = {
+    "access_token": None,
+    "expires_at": 0
+}
 
 # --- Database Models ---
+# (User and SavedJob models remain the same - omitted for brevity)
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
@@ -77,16 +88,14 @@ class SavedJob(db.Model):
     def __repr__(self):
         return f'<SavedJob {self.title} ({self.adzuna_job_id})>'
 
+
 # --- Flask-Login User Loader ---
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-# --- Forms (using Flask-WTF) ---
-# Note: CSRF protection is handled globally by Flask-WTF/CSRFProtect
-# but forms still need the hidden tag rendered in the template.
-# For AJAX, we send the token via headers.
-
+# --- Forms ---
+# (RegistrationForm and LoginForm remain the same - omitted for brevity)
 class RegistrationForm(FlaskForm):
     email = StringField('Email', validators=[DataRequired(), Email()])
     password = PasswordField('Password', validators=[DataRequired(), Length(min=8)])
@@ -104,8 +113,127 @@ class LoginForm(FlaskForm):
     remember = BooleanField('Remember Me')
     submit = SubmitField('Login')
 
-# --- Helper Functions (Adzuna, AI, Data Fetching) ---
+# --- Helper Functions ---
 
+# --- Lightcast Helper Functions ---
+def get_lightcast_token():
+    """Gets a valid Lightcast access token, using cache or fetching a new one."""
+    global lightcast_token_cache
+    current_time = time.time()
+
+    # Check cache validity (with a small buffer)
+    if lightcast_token_cache["access_token"] and lightcast_token_cache["expires_at"] > current_time + 60:
+        app.logger.info("Using cached Lightcast token.")
+        return lightcast_token_cache["access_token"]
+
+    # Fetch new token if cache is invalid or missing
+    if not LIGHTCAST_CLIENT_ID or not LIGHTCAST_CLIENT_SECRET:
+        app.logger.error("Lightcast Client ID or Secret not configured.")
+        return None
+
+    payload = {
+        'client_id': LIGHTCAST_CLIENT_ID,
+        'client_secret': LIGHTCAST_CLIENT_SECRET,
+        'grant_type': 'client_credentials',
+        'scope': 'emsi_open' # Scope for Titles API (check Lightcast docs if different)
+    }
+    headers = {'Content-Type': 'application/x-www-form-urlencoded'}
+    app.logger.info("Requesting new Lightcast access token.")
+
+    try:
+        response = requests.post(LIGHTCAST_AUTH_URL, data=payload, headers=headers, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        access_token = data.get("access_token")
+        expires_in = data.get("expires_in", 3600) # Default to 1 hour if not provided
+
+        if not access_token:
+            app.logger.error("Failed to get access_token from Lightcast response.")
+            return None
+
+        # Update cache
+        lightcast_token_cache["access_token"] = access_token
+        lightcast_token_cache["expires_at"] = current_time + expires_in
+        app.logger.info("Successfully obtained and cached new Lightcast token.")
+        return access_token
+
+    except requests.exceptions.RequestException as e:
+        app.logger.error(f"Error requesting Lightcast token: {e}")
+        return None
+    except Exception as e:
+         app.logger.error(f"Unexpected error getting Lightcast token: {e}")
+         return None
+
+
+def get_lightcast_skills(job_title):
+    """Fetches common skills for a job title using Lightcast Titles API."""
+    if not job_title:
+        return None
+
+    access_token = get_lightcast_token()
+    if not access_token:
+        app.logger.error("Cannot fetch Lightcast skills without access token.")
+        # Avoid flashing here, let fetch_market_insights handle overall errors
+        return None
+
+    headers = {'Authorization': f'Bearer {access_token}'}
+
+    # 1. Normalize the job title to get Lightcast Title ID
+    normalize_url = f"{LIGHTCAST_API_BASE_URL}/titles/normalize"
+    normalize_params = {'q': job_title, 'limit': 1} # Limit to best match
+    normalized_title_id = None
+
+    app.logger.info(f"Normalizing job title '{job_title}' with Lightcast.")
+    try:
+        response = requests.get(normalize_url, headers=headers, params=normalize_params, timeout=10)
+        response.raise_for_status()
+        normalize_data = response.json()
+
+        if normalize_data and 'data' in normalize_data and normalize_data['data']:
+            normalized_title_id = normalize_data['data'][0].get('id')
+            app.logger.info(f"Normalized '{job_title}' to Lightcast ID: {normalized_title_id}")
+        else:
+            app.logger.warning(f"Could not normalize job title '{job_title}' via Lightcast.")
+            return None # Cannot proceed without ID
+
+    except requests.exceptions.RequestException as e:
+        app.logger.error(f"Error normalizing Lightcast title: {e}")
+        return None
+    except Exception as e:
+         app.logger.error(f"Unexpected error during Lightcast title normalization: {e}")
+         return None
+
+    # 2. Fetch Title details (including skills) using the ID
+    if not normalized_title_id:
+        return None
+
+    details_url = f"{LIGHTCAST_API_BASE_URL}/titles/{normalized_title_id}"
+    # Include 'fields=mapping' to ensure skills are returned
+    details_params = {'fields': 'mapping'}
+
+    app.logger.info(f"Fetching skills for Lightcast ID: {normalized_title_id}")
+    try:
+        response = requests.get(details_url, headers=headers, params=details_params, timeout=10)
+        response.raise_for_status()
+        details_data = response.json()
+
+        if details_data and 'data' in details_data and 'mapping' in details_data['data'] and 'skills' in details_data['data']['mapping']:
+            skills_list = [skill.get('name') for skill in details_data['data']['mapping']['skills'] if skill.get('name')]
+            app.logger.info(f"Found {len(skills_list)} skills for '{job_title}' (ID: {normalized_title_id})")
+            return skills_list[:15] # Return top 15 skills for brevity
+        else:
+            app.logger.warning(f"No skills found in Lightcast mapping for ID: {normalized_title_id}")
+            return None
+
+    except requests.exceptions.RequestException as e:
+        app.logger.error(f"Error fetching Lightcast title details/skills: {e}")
+        return None
+    except Exception as e:
+         app.logger.error(f"Unexpected error fetching Lightcast skills: {e}")
+         return None
+
+# --- Other Helper Functions (Adzuna, AI, etc.) ---
+# (get_salary_histogram, get_ai_summary, extract_adzuna_job_id remain the same - omitted for brevity)
 def get_salary_histogram(country_code, location, job_title):
     """ Fetches salary histogram data from Adzuna. """
     if not ADZUNA_APP_ID or not ADZUNA_APP_KEY: return None
@@ -248,11 +376,11 @@ def extract_adzuna_job_id(url):
         return None
 
 
+# --- Main Data Fetching Logic ---
 def fetch_market_insights(what, where, country):
     """
-    Fetches job listings, salary data, and AI summary based on search criteria.
+    Fetches job listings, salary data, AI summary, and Lightcast skills.
     Returns an 'insights_data' dictionary or None if a critical error occurs.
-    Handles flashing messages for user feedback during page loads.
     """
     if not all([what, where, country]):
         flash("Missing search criteria.", "error")
@@ -262,12 +390,18 @@ def fetch_market_insights(what, where, country):
         flash("Adzuna API credentials not configured.", "error")
         return None
 
+    # Initialize data containers
     insights_data = None
+    adzuna_data = None
+    job_listings = []
+    total_jobs = 0
     salary_data = None
     ai_summary_html = None
+    common_skills = None # Initialize common_skills
+
     query_details = {'what': what, 'where': where, 'country': country}
 
-    # --- Call Adzuna Search API ---
+    # --- 1. Call Adzuna Search API ---
     api_url = f"{ADZUNA_API_BASE_URL}/{country.lower()}/search/1"
     params = {
         'app_id': ADZUNA_APP_ID, 'app_key': ADZUNA_APP_KEY,
@@ -278,19 +412,18 @@ def fetch_market_insights(what, where, country):
     try:
         app.logger.info(f"Fetching Adzuna data for: {params}")
         response = requests.get(api_url, params=params, timeout=20)
-        response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
-        data = response.json()
+        response.raise_for_status()
+        adzuna_data = response.json()
         app.logger.info("Successfully fetched data from Adzuna.")
 
-        total_jobs = data.get('count', 0)
-        results = data.get('results', [])
-        job_listings = []
+        total_jobs = adzuna_data.get('count', 0)
+        results = adzuna_data.get('results', [])
         for job in results:
             adzuna_url = job.get('redirect_url')
-            adzuna_job_id = extract_adzuna_job_id(adzuna_url) # Use helper function
-            if adzuna_job_id: # Only include jobs where we could extract an ID
+            adzuna_job_id = extract_adzuna_job_id(adzuna_url)
+            if adzuna_job_id:
                 job_listings.append({
-                    "adzuna_job_id": adzuna_job_id, # Add the extracted ID
+                    "adzuna_job_id": adzuna_job_id,
                     "title": job.get('title'),
                     "company": job.get('company', {}).get('display_name', 'N/A'),
                     "location": job.get('location', {}).get('display_name', 'N/A'),
@@ -301,96 +434,93 @@ def fetch_market_insights(what, where, country):
             else:
                 app.logger.warning(f"Skipping job due to missing Adzuna ID: {job.get('title')}")
 
-        # --- Call Adzuna Histogram & Azure AI ---
-        # Pass errors from helpers up if needed, or let them return None
-        salary_data = get_salary_histogram(country, where, what)
-        ai_summary_raw = get_ai_summary(query_details, total_jobs, job_listings[:10], salary_data) # Pass limited sample
-        if ai_summary_raw:
-            # Convert Markdown summary to HTML
-            html_summary = markdown.markdown(ai_summary_raw, extensions=['fenced_code', 'tables'])
-            ai_summary_html = Markup(html_summary) # Mark as safe HTML
-
-        # --- Assemble final insights ---
-        insights_data = {
-            "query": query_details,
-            "total_matching_jobs": total_jobs,
-            "job_listings": job_listings,
-            "salary_data": salary_data,
-            "ai_summary_html": ai_summary_html
-        }
-        return insights_data
-
-    # --- Error Handling for Adzuna Search ---
     except requests.exceptions.Timeout:
         flash("Adzuna search request timed out. Please try again.", "error")
-        return None
+        return None # Critical error, stop processing
     except requests.exceptions.HTTPError as e:
         flash(f"Adzuna API Error ({e.response.status_code}). Please check search terms or try again later.", "error")
-        return None
+        return None # Critical error
     except requests.exceptions.RequestException as e:
         flash("Could not connect to Adzuna. Please check your connection or try again later.", "error")
-        return None
+        return None # Critical error
     except Exception as e:
-        app.logger.error(f"Unexpected error during insight fetching: {e}")
-        flash("An internal server error occurred while fetching insights.", "error")
-        return None
+        app.logger.error(f"Unexpected error during Adzuna search: {e}")
+        flash("An internal server error occurred while fetching job listings.", "error")
+        return None # Critical error
+
+    # --- 2. Call Adzuna Histogram (Salary) ---
+    salary_data = get_salary_histogram(country, where, what)
+    # Continue even if salary data fails
+
+    # --- 3. Call Lightcast Skills API ---
+    common_skills = get_lightcast_skills(what) # Use the 'what' field
+    if common_skills is None:
+        app.logger.warning(f"Could not retrieve common skills for '{what}' from Lightcast.")
+        # Optionally flash a message, but continue processing
+        # flash("Could not retrieve common skills data.", "info")
+    # Continue even if skills data fails
+
+    # --- 4. Call Azure AI Summary ---
+    ai_summary_raw = get_ai_summary(query_details, total_jobs, job_listings[:10], salary_data)
+    if ai_summary_raw:
+        html_summary = markdown.markdown(ai_summary_raw, extensions=['fenced_code', 'tables'])
+        ai_summary_html = Markup(html_summary)
+    # Continue even if AI summary fails
+
+    # --- 5. Assemble final insights ---
+    insights_data = {
+        "query": query_details,
+        "total_matching_jobs": total_jobs,
+        "job_listings": job_listings,
+        "salary_data": salary_data,
+        "ai_summary_html": ai_summary_html,
+        "common_skills": common_skills # Add the fetched skills
+    }
+    return insights_data
+
 
 # --- Routes ---
 
-# Keep home() and get_insights() routes as they were in the PRG version
 @app.route('/')
 def home():
-    """
-    Renders the main search page.
-    If search parameters are provided via GET, fetches and displays results.
-    """
-    # Use .get(key, '') to provide default empty string if key is missing
+    """ Renders the main search page or results based on GET parameters. """
     what = request.args.get('what', '')
     where = request.args.get('where', '')
     country = request.args.get('country', '')
-    form_data = {'what': what, 'where': where, 'country': country} # For pre-filling form
+    form_data = {'what': what, 'where': where, 'country': country}
 
     insights_data = None
     saved_job_ids = set()
 
-    # If search parameters are present (and not empty strings), fetch insights
-    if what and where and country: # Check if values are truthy
+    if what and where and country:
         app.logger.info(f"Home route received search parameters: {form_data}")
         insights_data = fetch_market_insights(what, where, country)
-        # insights_data will be None if fetch_market_insights encountered an error and flashed a message
 
-    # Get saved job IDs for the current user regardless of search
     if current_user.is_authenticated:
         saved_job_ids = {job.adzuna_job_id for job in current_user.saved_jobs}
 
     return render_template('index.html',
                            insights=insights_data,
-                           form_data=form_data, # Pass form_data to pre-fill search boxes
+                           form_data=form_data,
                            saved_job_ids=saved_job_ids)
 
 
 @app.route('/insights', methods=['POST'])
 def get_insights():
-    """
-    Handles the POST from the search form.
-    Redirects to the 'home' route with search parameters as GET query args (PRG Pattern).
-    """
+    """ Handles the POST from the search form (PRG Pattern). """
     what = request.form.get('what')
     where = request.form.get('where')
     country = request.form.get('country')
 
     if not all([what, where, country]):
         flash("Please fill in all search fields.", "error")
-        # Redirect back to the empty home page if validation fails
         return redirect(url_for('home'))
 
-    # Redirect to the home route with parameters in the query string
     return redirect(url_for('home', what=what, where=where, country=country))
 
 
 # --- Authentication Routes ---
-# Keep register(), login(), logout() as they were in the PRG version
-# (Code omitted for brevity)
+# (register, login, logout remain the same - omitted for brevity)
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if current_user.is_authenticated:
@@ -449,8 +579,8 @@ def logout():
     flash('You have been logged out.', 'success')
     return redirect(url_for('home'))
 
-# --- Saved Jobs Routes ---
-
+# --- Saved Jobs Routes (AJAX Handlers + Form Handler) ---
+# (save_job and unsave_job remain the same - omitted for brevity)
 @app.route('/save_job', methods=['POST'])
 @login_required
 def save_job():
@@ -574,7 +704,7 @@ def unsave_job():
             return redirect(url_for('saved_jobs_list')) # Redirect back for form
 
 
-# --- Saved Jobs Page Route (Remains standard Flask route) ---
+# --- Saved Jobs Page Route ---
 @app.route('/saved_jobs')
 @login_required
 def saved_jobs_list():
@@ -585,7 +715,5 @@ def saved_jobs_list():
 
 # --- Main execution ---
 if __name__ == '__main__':
-    # Use Gunicorn or another WSGI server in production instead of app.run()
-    # Debug should be False in production
-    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)), debug=False) # Set debug=True for development if needed
+    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)), debug=False)
 
