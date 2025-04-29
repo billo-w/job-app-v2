@@ -106,7 +106,7 @@ class LoginForm(FlaskForm):
 
 # --- Helper Functions (Adzuna, AI, Data Fetching) ---
 # Keep get_salary_histogram, get_ai_summary, extract_adzuna_job_id,
-# and fetch_market_insights functions as they were in the PRG version.
+# and fetch_market_insights functions as they were.
 # (Code omitted for brevity, assume they are present and correct)
 def get_salary_histogram(country_code, location, job_title):
     """ Fetches salary histogram data from Adzuna. """
@@ -452,28 +452,38 @@ def logout():
     flash('You have been logged out.', 'success')
     return redirect(url_for('home'))
 
-# --- Saved Jobs Routes (AJAX Handlers) ---
+# --- Saved Jobs Routes ---
 
 @app.route('/save_job', methods=['POST'])
 @login_required
 def save_job():
     """Handles AJAX request to save a job."""
-    data = request.get_json()
-    if not data:
-        return jsonify({'status': 'error', 'message': 'Invalid request format.'}), 400
+    # Check if the request is JSON (from index page AJAX)
+    if request.is_json:
+        data = request.get_json()
+        if not data:
+            return jsonify({'status': 'error', 'message': 'Invalid JSON request.'}), 400
+        adzuna_job_id = data.get('adzuna_job_id')
+        title = data.get('title')
+        company = data.get('company')
+        location = data.get('location')
+        adzuna_url = data.get('adzuna_url')
+        is_ajax = True
+    else:
+        # Fallback or handle potential non-AJAX POST if needed
+        # For now, assume save only happens via AJAX from index
+        app.logger.warning("Received non-JSON POST request to /save_job")
+        return jsonify({'status': 'error', 'message': 'Unsupported request format.'}), 415
 
-    adzuna_job_id = data.get('adzuna_job_id')
-    title = data.get('title')
-    company = data.get('company')
-    location = data.get('location')
-    adzuna_url = data.get('adzuna_url')
 
     if not all([adzuna_job_id, title, adzuna_url]):
+         # Return JSON error for AJAX
         return jsonify({'status': 'error', 'message': 'Missing job details.'}), 400
 
     # Check if already saved
     existing_save = SavedJob.query.filter_by(user_id=current_user.id, adzuna_job_id=adzuna_job_id).first()
     if existing_save:
+        # Return JSON error for AJAX
         return jsonify({'status': 'error', 'message': 'Job already saved.'}), 409 # 409 Conflict
 
     # Create and save the job
@@ -485,40 +495,86 @@ def save_job():
     try:
         db.session.commit()
         app.logger.info(f"User {current_user.id} saved job {adzuna_job_id} via AJAX")
+         # Return JSON success for AJAX
         return jsonify({'status': 'success', 'message': 'Job saved!'})
     except Exception as e:
         db.session.rollback()
         app.logger.error(f"Error saving job {adzuna_job_id} for user {current_user.id} via AJAX: {e}")
+        # Return JSON error for AJAX
         return jsonify({'status': 'error', 'message': 'Database error saving job.'}), 500
 
 
 @app.route('/unsave_job', methods=['POST'])
 @login_required
 def unsave_job():
-    """Handles AJAX request to unsave a job."""
-    data = request.get_json()
-    if not data:
-        return jsonify({'status': 'error', 'message': 'Invalid request format.'}), 400
+    """
+    Handles both AJAX (JSON) requests from index page
+    and standard form POST requests from saved_jobs page.
+    """
+    is_ajax = False
+    adzuna_job_id = None
 
-    adzuna_job_id = data.get('adzuna_job_id')
+    # Check content type to determine request source
+    if request.is_json:
+        is_ajax = True
+        data = request.get_json()
+        if not data:
+            return jsonify({'status': 'error', 'message': 'Invalid JSON request.'}), 400
+        adzuna_job_id = data.get('adzuna_job_id')
+        app.logger.info(f"Received AJAX unsave request for job ID: {adzuna_job_id}")
+
+    elif request.form:
+        # Handle standard form submission from saved_jobs.html
+        adzuna_job_id = request.form.get('adzuna_job_id')
+        app.logger.info(f"Received Form unsave request for job ID: {adzuna_job_id}")
+        # CSRF token is validated automatically by Flask-CSRFProtect for form posts
+
+    else:
+        # Neither JSON nor Form data found
+        app.logger.error("Unsave request received without valid JSON or Form data.")
+        # Return appropriate error based on expected content type or a generic one
+        return "Unsupported Media Type", 415
+
+    # --- Common Logic ---
     if not adzuna_job_id:
-        return jsonify({'status': 'error', 'message': 'Missing job ID.'}), 400
+        message = 'Missing job ID.'
+        if is_ajax:
+            return jsonify({'status': 'error', 'message': message}), 400
+        else:
+            flash(message, 'error')
+            return redirect(url_for('saved_jobs_list')) # Redirect back for form
 
     job_to_unsave = SavedJob.query.filter_by(user_id=current_user.id, adzuna_job_id=adzuna_job_id).first()
+
     if job_to_unsave:
         db.session.delete(job_to_unsave)
         try:
             db.session.commit()
-            app.logger.info(f"User {current_user.id} unsaved job {adzuna_job_id} via AJAX")
-            return jsonify({'status': 'success', 'message': 'Job removed.'})
+            message = 'Job removed from saved list.'
+            app.logger.info(f"User {current_user.id} unsaved job {adzuna_job_id}")
+            if is_ajax:
+                return jsonify({'status': 'success', 'message': message})
+            else:
+                flash(message, 'success')
+                return redirect(url_for('saved_jobs_list')) # Redirect back for form
         except Exception as e:
             db.session.rollback()
-            app.logger.error(f"Error unsaving job {adzuna_job_id} for user {current_user.id} via AJAX: {e}")
-            return jsonify({'status': 'error', 'message': 'Database error unsaving job.'}), 500
+            message = 'Database error unsaving job.'
+            app.logger.error(f"Error unsaving job {adzuna_job_id} for user {current_user.id}: {e}")
+            if is_ajax:
+                return jsonify({'status': 'error', 'message': message}), 500
+            else:
+                flash(message, 'error')
+                return redirect(url_for('saved_jobs_list')) # Redirect back for form
     else:
-        # Job might have already been unsaved or never existed for user
+        # Job not found
+        message = 'Job not found in your saved list.'
         app.logger.warning(f"Attempt to unsave non-existent/already unsaved job {adzuna_job_id} for user {current_user.id}")
-        return jsonify({'status': 'error', 'message': 'Job not found in saved list.'}), 404 # 404 Not Found
+        if is_ajax:
+            return jsonify({'status': 'error', 'message': message}), 404 # 404 Not Found
+        else:
+            flash(message, 'warning')
+            return redirect(url_for('saved_jobs_list')) # Redirect back for form
 
 
 # --- Saved Jobs Page Route (Remains standard Flask route) ---
@@ -527,8 +583,6 @@ def unsave_job():
 def saved_jobs_list():
     """Displays the list of jobs saved by the current user."""
     jobs = SavedJob.query.filter_by(user_id=current_user.id).order_by(SavedJob.id.desc()).all()
-    # Note: Unsaving from this page still uses standard form submission
-    # unless you add AJAX handling to saved_jobs.html as well.
     return render_template('saved_jobs.html', title='Saved Jobs', jobs=jobs)
 
 
