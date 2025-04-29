@@ -388,4 +388,4 @@ if __name__ == '__main__':
     with app.app_context():
          # db.create_all() # Comment out after first run or when using migrations
          pass
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    app.run(host='0.0.0.0', port=5000, debug=False) # debug=False for production
