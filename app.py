@@ -5,9 +5,9 @@ from flask import (Flask, request, jsonify, render_template, flash, redirect,
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_login import (LoginManager, UserMixin, login_user, logout_user,
-                       login_required, current_user) # Added Flask-Login imports
+                         login_required, current_user) # Added Flask-Login imports
 from flask_wtf import FlaskForm # Added Flask-WTF
-from wtforms import StringField, PasswordField, SubmitField # Added Form fields
+from wtforms import StringField, PasswordField, SubmitField, BooleanField # Added BooleanField
 from wtforms.validators import DataRequired, Email, EqualTo, Length, ValidationError # Added validators
 from werkzeug.security import generate_password_hash, check_password_hash # For passwords
 from dotenv import load_dotenv
@@ -51,7 +51,7 @@ AZURE_AI_KEY = os.getenv('AZURE_AI_KEY')
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash = db.Column(db.String(255), nullable=False)
+    password_hash = db.Column(db.String(255), nullable=False) # Increased length
     saved_jobs = db.relationship('SavedJob', backref='user', lazy=True, cascade="all, delete-orphan") # Relationship
 
     def set_password(self, password):
@@ -101,59 +101,142 @@ class RegistrationForm(FlaskForm):
 class LoginForm(FlaskForm):
     email = StringField('Email', validators=[DataRequired(), Email()])
     password = PasswordField('Password', validators=[DataRequired()])
+    remember = BooleanField('Remember Me') # Added remember field
     submit = SubmitField('Login')
 
-# --- Helper Functions (Adzuna, AI) ---
+# --- Helper Functions (Adzuna, AI, Data Fetching) ---
 
 def get_salary_histogram(country_code, location, job_title):
-    """ Fetches salary histogram data from Adzuna. (Unchanged) """
-    # ... (keep existing function code) ...
+    """ Fetches salary histogram data from Adzuna. """
     if not ADZUNA_APP_ID or not ADZUNA_APP_KEY: return None
     histogram_url = f"{ADZUNA_API_BASE_URL}/{country_code.lower()}/histogram"
-    params = { 'app_id': ADZUNA_APP_ID, 'app_key': ADZUNA_APP_KEY, 'location0': location, 'what': job_title, 'content-type': 'application/json' }
+    params = {
+        'app_id': ADZUNA_APP_ID, 'app_key': ADZUNA_APP_KEY,
+        'location0': location, 'what': job_title,
+        'content-type': 'application/json'
+    }
     app.logger.info(f"Fetching salary histogram for: {params}")
     try:
-        response = requests.get(histogram_url, params=params, timeout=15); response.raise_for_status(); data = response.json()
+        response = requests.get(histogram_url, params=params, timeout=15)
+        response.raise_for_status()
+        data = response.json()
         if 'histogram' in data and data['histogram']:
             app.logger.info("Successfully fetched salary histogram.")
-            total_salary = 0; total_count = 0
+            total_salary = 0
+            total_count = 0
             for salary_point, count in data['histogram'].items():
-                try: total_salary += float(salary_point) * count; total_count += count
-                except ValueError: continue
+                try:
+                    total_salary += float(salary_point) * count
+                    total_count += count
+                except ValueError:
+                    continue # Skip non-numeric salary points if any
             average_salary = round(total_salary / total_count) if total_count > 0 else None
             return {"histogram": data['histogram'], "average": average_salary}
-        else: app.logger.info("No salary histogram data found."); return None
-    except Exception as e: app.logger.error(f"Error fetching salary histogram: {e}"); return None
+        else:
+            app.logger.info("No salary histogram data found.")
+            return None
+    except requests.exceptions.Timeout:
+        app.logger.error("Adzuna histogram request timed out.")
+        flash("Salary data request timed out.", "warning")
+        return None
+    except requests.exceptions.HTTPError as e:
+        app.logger.error(f"Adzuna histogram HTTP Error: {e.response.status_code}.")
+        flash(f"Could not fetch salary data (API Error {e.response.status_code}).", "warning")
+        return None
+    except requests.exceptions.RequestException as e:
+        app.logger.error(f"Adzuna histogram connection error: {e}")
+        flash("Could not connect to Adzuna for salary data.", "warning")
+        return None
+    except Exception as e:
+        app.logger.error(f"Unexpected error fetching salary histogram: {e}")
+        flash("An unexpected error occurred while fetching salary data.", "warning")
+        return None
 
 
 def get_ai_summary(query_details, total_jobs, job_listings_sample, salary_data):
-    """ Calls Azure AI model for an enhanced recruiter-focused summary. (Unchanged) """
-    # ... (keep existing function code) ...
-    if not AZURE_AI_ENDPOINT or not AZURE_AI_KEY: return None
-    sample_titles = [job['title'] for job in job_listings_sample[:7]]
-    sample_descriptions = " ".join([job['description'] for job in job_listings_sample[:5] if isinstance(job.get('description'), str)])
-    max_desc_length = 1000
-    if len(sample_descriptions) > max_desc_length: sample_descriptions = sample_descriptions[:max_desc_length] + "..."
+    """ Calls Azure AI model for an enhanced recruiter-focused summary. """
+    if not AZURE_AI_ENDPOINT or not AZURE_AI_KEY:
+        app.logger.warning("Azure AI credentials not configured. Skipping AI summary.")
+        return None
+
+    sample_titles = [job['title'] for job in job_listings_sample[:7]] # Limit sample size
+    # Ensure description is a string before joining
+    sample_descriptions = " ".join([
+        job['description'] for job in job_listings_sample[:5]
+        if isinstance(job.get('description'), str)
+    ])
+    max_desc_length = 1000 # Limit description length for prompt
+    if len(sample_descriptions) > max_desc_length:
+        sample_descriptions = sample_descriptions[:max_desc_length] + "..."
+
     salary_info = "Not available"
-    if salary_data and salary_data.get('average'): salary_info = f"approximately {salary_data['average']:,} (currency based on country)"
-    elif salary_data and salary_data.get('histogram'): salary_info = "Distribution data available, but average could not be calculated."
+    if salary_data and salary_data.get('average'):
+        salary_info = f"approximately {salary_data['average']:,} (currency based on country)"
+    elif salary_data and salary_data.get('histogram'):
+        salary_info = "Distribution data available, but average could not be calculated."
+
     system_message = ("You are an AI assistant providing recruitment market analysis. Focus on actionable insights for a recruiter based *only* on the provided data. Use Markdown for formatting (like **bold**).")
-    user_prompt = ( f"Analyze the job market for a recruiter hiring for '{query_details['what']}' in '{query_details['where']}, {query_details['country'].upper()}'.\n\n**Market Data:**\n- Total Job Listings Found: {total_jobs}\n- Estimated Average Salary: {salary_info}\n- Sample Job Titles: {', '.join(sample_titles) if sample_titles else 'N/A'}\n- Sample Job Description Excerpts: {sample_descriptions if sample_descriptions else 'N/A'}\n\n**Recruiter Analysis (Based *only* on above data - use Markdown for emphasis):**\n1.  **Market Activity & Competitiveness:** Based on job volume and salary data (if available), how active/competitive does this market seem?\n2.  **Key Skills/Keywords:** Based *only* on the sample titles and descriptions, what 2-3 potential key skills or technologies seem commonly required?\n3.  **Candidate Pool & Sourcing:** What does the job volume suggest about the likely candidate pool size and the potential need for proactive sourcing vs. relying on applications?\n\nProvide a concise, bulleted summary. Do not invent skills or salary details not present in the data." )
-    payload = { "messages": [{"role": "system", "content": system_message}, {"role": "user", "content": user_prompt}], "max_tokens": 250, "temperature": 0.5 }
-    headers = { 'Content-Type': 'application/json', 'api-key': AZURE_AI_KEY }
+    user_prompt = (
+        f"Analyze the job market for a recruiter hiring for '{query_details['what']}' in '{query_details['where']}, {query_details['country'].upper()}'.\n\n"
+        f"**Market Data:**\n"
+        f"- Total Job Listings Found: {total_jobs}\n"
+        f"- Estimated Average Salary: {salary_info}\n"
+        f"- Sample Job Titles: {', '.join(sample_titles) if sample_titles else 'N/A'}\n"
+        f"- Sample Job Description Excerpts: {sample_descriptions if sample_descriptions else 'N/A'}\n\n"
+        f"**Recruiter Analysis (Based *only* on above data - use Markdown for emphasis):**\n"
+        f"1.  **Market Activity & Competitiveness:** Based on job volume and salary data (if available), how active/competitive does this market seem?\n"
+        f"2.  **Key Skills/Keywords:** Based *only* on the sample titles and descriptions, what 2-3 potential key skills or technologies seem commonly required?\n"
+        f"3.  **Candidate Pool & Sourcing:** What does the job volume suggest about the likely candidate pool size and the potential need for proactive sourcing vs. relying on applications?\n\n"
+        f"Provide a concise, bulleted summary. Do not invent skills or salary details not present in the data."
+    )
+
+    payload = {
+        "messages": [{"role": "system", "content": system_message}, {"role": "user", "content": user_prompt}],
+        "max_tokens": 250, # Adjust as needed
+        "temperature": 0.5
+    }
+    headers = {
+        'Content-Type': 'application/json',
+        'api-key': AZURE_AI_KEY
+    }
     app.logger.info(f"Sending enhanced recruiter request to Azure AI Endpoint: {AZURE_AI_ENDPOINT}")
     try:
-        response = requests.post(AZURE_AI_ENDPOINT, headers=headers, json=payload, timeout=30); response.raise_for_status(); response_data = response.json()
+        response = requests.post(AZURE_AI_ENDPOINT, headers=headers, json=payload, timeout=30)
+        response.raise_for_status()
+        response_data = response.json()
         if 'choices' in response_data and len(response_data['choices']) > 0:
             message = response_data['choices'][0].get('message')
-            if message and 'content' in message: return message['content'].strip()
-            else: app.logger.warning(f"Azure AI response 'choices' structure unexpected: {message}"); return None
-        else: app.logger.warning(f"Azure AI response did not contain 'choices'. Response: {response_data}"); return None
-    except Exception as e: app.logger.error(f"Error calling Azure AI endpoint: {e}"); flash(f"Could not generate AI summary: Error communicating with the AI service.", "warning"); return None
+            if message and 'content' in message:
+                app.logger.info("Successfully received AI summary.")
+                return message['content'].strip()
+            else:
+                app.logger.warning(f"Azure AI response 'choices' structure unexpected: {message}")
+                return None
+        else:
+            app.logger.warning(f"Azure AI response did not contain 'choices'. Response: {response_data}")
+            return None
+    except requests.exceptions.Timeout:
+        app.logger.error("Azure AI request timed out.")
+        flash("AI summary request timed out.", "warning")
+        return None
+    except requests.exceptions.HTTPError as e:
+        app.logger.error(f"Azure AI HTTP Error: {e.response.status_code}.")
+        flash(f"Could not generate AI summary (AI Service Error {e.response.status_code}).", "warning")
+        return None
+    except requests.exceptions.RequestException as e:
+        app.logger.error(f"Azure AI connection error: {e}")
+        flash("Could not connect to the AI service for summary.", "warning")
+        return None
+    except Exception as e:
+        app.logger.error(f"Unexpected error calling Azure AI endpoint: {e}")
+        flash("An unexpected error occurred while generating the AI summary.", "warning")
+        return None
 
 
 def extract_adzuna_job_id(url):
     """Extracts the Adzuna job ID from the redirect URL."""
+    if not url:
+        return None
     try:
         parsed_url = urlparse(url)
         # Adzuna job ID is often the last path component before query params
@@ -162,57 +245,54 @@ def extract_adzuna_job_id(url):
             # Check if the last part looks like a job ID (often numeric or alphanumeric)
             potential_id = path_parts[-1]
             # Basic check: adjust if Adzuna ID format is different
+            # Ensure it's primarily numeric or alphanumeric and has a reasonable length
             if potential_id.isalnum() and len(potential_id) > 5:
                  return potential_id
-        # Fallback: Check query parameters (less common for ID)
+        # Fallback: Check query parameters (less common for ID, but possible)
         query_params = parse_qs(parsed_url.query)
+        if 'aid' in query_params: return query_params['aid'][0] # Check common Adzuna param
         if 'jobId' in query_params: return query_params['jobId'][0]
         if 'id' in query_params: return query_params['id'][0]
 
+        app.logger.warning(f"Could not extract Adzuna job ID from URL path or common query params: {url}")
+        return None # Return None if ID cannot be reliably extracted
+
     except Exception as e:
         app.logger.error(f"Error parsing Adzuna URL {url}: {e}")
-    return None # Return None if ID cannot be reliably extracted
+        return None
 
 
-# --- Routes ---
-
-@app.route('/')
-def home():
-    """ Renders the main search page. """
-    # Get saved job IDs for the current user to mark jobs as saved in the results
-    saved_job_ids = set()
-    if current_user.is_authenticated:
-        saved_job_ids = {job.adzuna_job_id for job in current_user.saved_jobs}
-
-    # Pass saved_job_ids to the template if needed immediately (or handle in /insights)
-    return render_template('index.html', insights=None, form_data={}, saved_job_ids=saved_job_ids)
-
-@app.route('/insights', methods=['POST'])
-def get_insights():
-    """ Handles search form submission, fetches data, gets AI summary, renders results. """
-    job_title = request.form.get('what')
-    location = request.form.get('where')
-    country_code = request.form.get('country')
-    form_data = {'what': job_title, 'where': location, 'country': country_code}
-
-    if not all([job_title, location, country_code]):
-        flash("Please fill in all fields.", "error")
-        return render_template('index.html', insights=None, form_data=form_data, saved_job_ids=set())
+def fetch_market_insights(what, where, country):
+    """
+    Fetches job listings, salary data, and AI summary based on search criteria.
+    Returns an 'insights_data' dictionary or None if a critical error occurs.
+    """
+    if not all([what, where, country]):
+        flash("Missing search criteria.", "error")
+        return None
 
     if not ADZUNA_APP_ID or not ADZUNA_APP_KEY:
-         flash("Adzuna API credentials not configured.", "error")
-         return render_template('index.html', insights=None, form_data=form_data, saved_job_ids=set())
+        flash("Adzuna API credentials not configured.", "error")
+        return None
 
     insights_data = None
     salary_data = None
-    ai_summary_raw = None
+    ai_summary_html = None
+    query_details = {'what': what, 'where': where, 'country': country}
 
     # --- Call Adzuna Search API ---
-    api_url = f"{ADZUNA_API_BASE_URL}/{country_code.lower()}/search/1"
-    params = { 'app_id': ADZUNA_APP_ID, 'app_key': ADZUNA_APP_KEY, 'what': job_title, 'where': location, 'results_per_page': RESULTS_PER_PAGE, 'content-type': 'application/json' }
+    api_url = f"{ADZUNA_API_BASE_URL}/{country.lower()}/search/1"
+    params = {
+        'app_id': ADZUNA_APP_ID, 'app_key': ADZUNA_APP_KEY,
+        'what': what, 'where': where,
+        'results_per_page': RESULTS_PER_PAGE,
+        'content-type': 'application/json'
+    }
     try:
         app.logger.info(f"Fetching Adzuna data for: {params}")
-        response = requests.get(api_url, params=params, timeout=20); response.raise_for_status(); data = response.json()
+        response = requests.get(api_url, params=params, timeout=20)
+        response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
+        data = response.json()
         app.logger.info("Successfully fetched data from Adzuna.")
 
         total_jobs = data.get('count', 0)
@@ -220,43 +300,103 @@ def get_insights():
         job_listings = []
         for job in results:
             adzuna_url = job.get('redirect_url')
-            adzuna_job_id = extract_adzuna_job_id(adzuna_url) if adzuna_url else None
+            adzuna_job_id = extract_adzuna_job_id(adzuna_url) # Use helper function
             if adzuna_job_id: # Only include jobs where we could extract an ID
                 job_listings.append({
                     "adzuna_job_id": adzuna_job_id, # Add the extracted ID
-                    "title": job.get('title'), "company": job.get('company', {}).get('display_name', 'N/A'),
+                    "title": job.get('title'),
+                    "company": job.get('company', {}).get('display_name', 'N/A'),
                     "location": job.get('location', {}).get('display_name', 'N/A'),
                     "description": job.get('description', 'No description available.'),
-                    "url": adzuna_url, "created": job.get('created')
+                    "url": adzuna_url,
+                    "created": job.get('created')
                 })
+            else:
+                app.logger.warning(f"Skipping job due to missing Adzuna ID: {job.get('title')}")
 
+        # --- Call Adzuna Histogram & Azure AI ---
+        salary_data = get_salary_histogram(country, where, what)
+        ai_summary_raw = get_ai_summary(query_details, total_jobs, job_listings[:10], salary_data) # Pass limited sample
+        if ai_summary_raw:
+            # Convert Markdown summary to HTML
+            html_summary = markdown.markdown(ai_summary_raw, extensions=['fenced_code', 'tables'])
+            ai_summary_html = Markup(html_summary) # Mark as safe HTML
+
+        # --- Assemble final insights ---
         insights_data = {
-            "query": form_data, "total_matching_jobs": total_jobs,
-            "job_listings": job_listings, "ai_summary_html": None, "salary_data": None
+            "query": query_details,
+            "total_matching_jobs": total_jobs,
+            "job_listings": job_listings,
+            "salary_data": salary_data,
+            "ai_summary_html": ai_summary_html
         }
+        return insights_data
 
-        # --- Call Adzuna Histogram & Azure AI (if search successful) ---
-        if insights_data:
-            salary_data = get_salary_histogram(country_code, location, job_title)
-            if salary_data: insights_data['salary_data'] = salary_data
+    # --- Error Handling for Adzuna Search ---
+    except requests.exceptions.Timeout:
+        flash("Adzuna search request timed out. Please try again.", "error")
+        return None
+    except requests.exceptions.HTTPError as e:
+        flash(f"Adzuna API Error ({e.response.status_code}). Please check search terms or try again later.", "error")
+        return None
+    except requests.exceptions.RequestException as e:
+        flash("Could not connect to Adzuna. Please check your connection or try again later.", "error")
+        return None
+    except Exception as e:
+        app.logger.error(f"Unexpected error during insight fetching: {e}")
+        flash("An internal server error occurred while fetching insights.", "error")
+        return None
 
-            ai_summary_raw = get_ai_summary( insights_data['query'], insights_data['total_matching_jobs'], insights_data['job_listings'][:10], salary_data )
-            if ai_summary_raw:
-                html_summary = markdown.markdown(ai_summary_raw, extensions=['fenced_code'])
-                insights_data['ai_summary_html'] = Markup(html_summary)
 
-    # --- Error Handling (Simplified) ---
-    except requests.exceptions.Timeout: flash("Adzuna request timed out.", "error")
-    except requests.exceptions.HTTPError as e: flash(f"Adzuna API Error: {e.response.status_code}.", "error")
-    except requests.exceptions.RequestException: flash("Adzuna connection error.", "error")
-    except Exception as e: app.logger.error(f"Unexpected error: {e}"); flash("An internal server error occurred.", "error")
+# --- Routes ---
 
-    # Get saved job IDs for the current user to mark jobs as saved
+@app.route('/')
+def home():
+    """
+    Renders the main search page.
+    If search parameters are provided via GET, fetches and displays results.
+    """
+    what = request.args.get('what')
+    where = request.args.get('where')
+    country = request.args.get('country')
+    form_data = {'what': what, 'where': where, 'country': country} # For pre-filling form
+
+    insights_data = None
     saved_job_ids = set()
+
+    # If search parameters are present, fetch insights
+    if all([what, where, country]):
+        app.logger.info(f"Home route received search parameters: {form_data}")
+        insights_data = fetch_market_insights(what, where, country)
+        # insights_data will be None if fetch_market_insights encountered an error and flashed a message
+
+    # Get saved job IDs for the current user regardless of search
     if current_user.is_authenticated:
         saved_job_ids = {job.adzuna_job_id for job in current_user.saved_jobs}
 
-    return render_template('index.html', insights=insights_data, form_data=form_data, saved_job_ids=saved_job_ids)
+    return render_template('index.html',
+                           insights=insights_data,
+                           form_data=form_data, # Pass form_data to pre-fill search boxes
+                           saved_job_ids=saved_job_ids)
+
+
+@app.route('/insights', methods=['POST'])
+def get_insights():
+    """
+    Handles the POST from the search form.
+    Redirects to the 'home' route with search parameters as GET query args (PRG Pattern).
+    """
+    what = request.form.get('what')
+    where = request.form.get('where')
+    country = request.form.get('country')
+
+    if not all([what, where, country]):
+        flash("Please fill in all search fields.", "error")
+        # Redirect back to the empty home page if validation fails
+        return redirect(url_for('home'))
+
+    # Redirect to the home route with parameters in the query string
+    return redirect(url_for('home', what=what, where=where, country=country))
 
 
 # --- Authentication Routes ---
@@ -271,11 +411,17 @@ def register():
         user = User(email=form.email.data)
         user.set_password(form.password.data)
         db.session.add(user)
-        db.session.commit()
-        flash('Congratulations, you are now a registered user! Please login.', 'success')
-        app.logger.info(f"New user registered: {form.email.data}")
-        return redirect(url_for('login'))
+        try:
+            db.session.commit()
+            flash('Congratulations, you are now a registered user! Please login.', 'success')
+            app.logger.info(f"New user registered: {form.email.data}")
+            return redirect(url_for('login'))
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Error registering user {form.email.data}: {e}")
+            flash('An error occurred during registration. Please try again.', 'error')
     return render_template('register.html', title='Register', form=form)
+
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -286,15 +432,24 @@ def login():
         user = User.query.filter_by(email=form.email.data).first()
         if user is None or not user.check_password(form.password.data):
             flash('Invalid email or password.', 'error')
-            return redirect(url_for('login'))
-        # Log the user in
-        login_user(user, remember=True) # Add 'remember=True' if you want "remember me" functionality
-        flash(f'Welcome back, {user.email}!', 'success')
-        app.logger.info(f"User logged in: {user.email}")
-        # Redirect to the page the user was trying to access, or home
-        next_page = request.args.get('next')
-        return redirect(next_page) if next_page else redirect(url_for('home'))
+            # No redirect here, just re-render the login form with the error
+        else:
+            # Log the user in
+            login_user(user, remember=form.remember.data) # Use remember value from form
+            flash(f'Welcome back, {user.email}!', 'success')
+            app.logger.info(f"User logged in: {user.email}")
+            # Redirect to the page the user was trying to access, or home
+            next_page = request.args.get('next')
+            # Basic security check for next_page to prevent open redirect
+            if next_page and urlparse(next_page).netloc == '':
+                 app.logger.info(f"Redirecting logged in user to: {next_page}")
+                 return redirect(next_page)
+            else:
+                 app.logger.info("Redirecting logged in user to home.")
+                 return redirect(url_for('home'))
+    # Render login page on GET or if form validation fails
     return render_template('login.html', title='Login', form=form)
+
 
 @app.route('/logout')
 @login_required # Ensure user is logged in to logout
@@ -309,15 +464,24 @@ def logout():
 @app.route('/save_job', methods=['POST'])
 @login_required # Protect this route
 def save_job():
+    # Job details
     adzuna_job_id = request.form.get('adzuna_job_id')
     title = request.form.get('title')
     company = request.form.get('company')
     location = request.form.get('location')
     adzuna_url = request.form.get('adzuna_url')
+    # Search context for redirect
+    what = request.form.get('what')
+    where = request.form.get('where')
+    country = request.form.get('country')
 
     if not all([adzuna_job_id, title, adzuna_url]):
-         flash('Missing job details to save.', 'error')
-         return redirect(request.referrer or url_for('home')) # Redirect back
+        flash('Missing job details to save.', 'error')
+        # Try to redirect back with context if possible, else home
+        if all([what, where, country]):
+             return redirect(url_for('home', what=what, where=where, country=country))
+        else:
+             return redirect(url_for('home'))
 
     # Check if already saved
     existing_save = SavedJob.query.filter_by(user_id=current_user.id, adzuna_job_id=adzuna_job_id).first()
@@ -326,12 +490,8 @@ def save_job():
     else:
         # Create and save the job
         saved_job = SavedJob(
-            adzuna_job_id=adzuna_job_id,
-            title=title,
-            company=company,
-            location=location,
-            adzuna_url=adzuna_url,
-            user_id=current_user.id
+            adzuna_job_id=adzuna_job_id, title=title, company=company,
+            location=location, adzuna_url=adzuna_url, user_id=current_user.id
         )
         db.session.add(saved_job)
         try:
@@ -343,26 +503,37 @@ def save_job():
             app.logger.error(f"Error saving job {adzuna_job_id} for user {current_user.id}: {e}")
             flash('Error saving job. Please try again.', 'error')
 
-    try:
-        db.session.commit()
-        flash('Job saved successfully!', 'success')
-    except Exception as e:
-       # ... error handling ...
-       pass # Make sure it still tries to redirect even on error if appropriate
-
-    # --- Temporary Change ---
-    app.logger.info("Save processed. Forcing redirect to home.")
-    return redirect(url_for('home'))
-    # --- End Temporary Change --- #
+    # Redirect back to the search results page using the context
+    if all([what, where, country]):
+        return redirect(url_for('home', what=what, where=where, country=country))
+    else:
+        # Fallback if context is missing (shouldn't happen from index)
+        app.logger.warning("Save job request missing search context for redirect. Falling back to home.")
+        return redirect(url_for('home'))
 
 
 @app.route('/unsave_job', methods=['POST'])
 @login_required # Protect this route
 def unsave_job():
     adzuna_job_id = request.form.get('adzuna_job_id')
+    # Search context for redirect (might be present if unsaving from index)
+    what = request.form.get('what')
+    where = request.form.get('where')
+    country = request.form.get('country')
+
+    redirect_url = url_for('saved_jobs_list') # Default redirect for unsave from saved_jobs page
+
+    # If search context is present, redirect back to search results instead
+    if all([what, where, country]):
+        redirect_url = url_for('home', what=what, where=where, country=country)
+        app.logger.info(f"Unsaving job from search context: {what}, {where}, {country}")
+    else:
+         app.logger.info("Unsaving job from saved jobs list or unknown context.")
+
+
     if not adzuna_job_id:
         flash('Missing job ID to unsave.', 'error')
-        return redirect(request.referrer or url_for('home'))
+        return redirect(redirect_url) # Redirect back appropriately
 
     job_to_unsave = SavedJob.query.filter_by(user_id=current_user.id, adzuna_job_id=adzuna_job_id).first()
     if job_to_unsave:
@@ -378,8 +549,8 @@ def unsave_job():
     else:
         flash('Job not found in your saved list.', 'warning')
 
-    # Redirect back to the page the user came from
-    return redirect(request.referrer or url_for('home'))
+    # Redirect back based on context
+    return redirect(redirect_url)
 
 
 @app.route('/saved_jobs')
@@ -394,7 +565,10 @@ def saved_jobs_list():
 if __name__ == '__main__':
     # Create database tables if they don't exist (useful for initial local setup)
     # For production, rely on Flask-Migrate
-    with app.app_context():
-         # db.create_all() # Comment out after first run or when using migrations
-         pass
-    app.run(host='0.0.0.0', port=5000, debug=False) # debug=False for production
+    # with app.app_context():
+    #     db.create_all() # Comment out after first run or when using migrations
+
+    # Use Gunicorn or another WSGI server in production instead of app.run()
+    # Debug should be False in production
+    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)), debug=False)
+
