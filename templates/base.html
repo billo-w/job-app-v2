@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Job Insights{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; /* bg-slate-50 */ }
+        .flash-message { border-radius: 0.5rem; padding: 1rem; margin-bottom: 1.5rem; border-left-width: 4px; font-weight: 500; box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.07), 0 1px 2px -1px rgb(0 0 0 / 0.07); }
+        .flash-error { background-color: #fef2f2; color: #b91c1c; border-color: #ef4444; }
+        .flash-success { background-color: #f0fdf4; color: #15803d; border-color: #22c55e; }
+        .flash-info { background-color: #eff6ff; color: #1d4ed8; border-color: #60a5fa; }
+        .flash-warning { background-color: #fffbeb; color: #b45309; border-color: #f59e0b; }
+        input[type="email"]:focus, input[type="password"]:focus, input[type="text"]:focus {
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.3); /* Indigo focus ring */
+            border-color: #6366f1; /* Indigo border */
+        }
+        button[type="submit"] { transition: all 0.15s ease-in-out; }
+        button[type="submit"]:hover { background-color: #4338ca; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(67, 56, 202, 0.2); }
+        button[type="submit"]:focus-visible { outline: 2px solid #a5b4fc; outline-offset: 2px; }
+        .job-card:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.07), 0 4px 6px -4px rgb(0 0 0 / 0.07); }
+        .transition-all-ease { transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
+        /* Combined unsave-btn styles */
+        .unsave-btn {
+            color: #ef4444; /* Default text color (red-500) */
+            background-color: transparent; /* Default background */
+            border: 1px solid #fecaca; /* Default border (red-200) */
+            padding: 0.3rem 0.6rem;
+            font-size: 0.75rem;
+            border-radius: 0.375rem;
+            font-weight: 500;
+            transition: all 0.15s ease-in-out;
+        }
+        .unsave-btn:hover {
+            color: #dc2626; /* Darker red text on hover (red-600) */
+            background-color: #fee2e2; /* Lighter red background on hover (red-100) */
+            border-color: #fca5a5; /* Darker red border on hover (red-300) */
+        }
+        /* Saved state button (used in index.html) */
+        .saved-btn {
+            background-color: #fef2f2; /* Light red background (red-50) */
+            color: #b91c1c; /* Dark red text (red-700) */
+            border: 1px solid #fecaca; /* Light red border (red-200) */
+        }
+        .saved-btn:hover {
+             background-color: #fee2e2; /* Slightly darker red background on hover */
+             border-color: #fca5a5;
+        }
+
+        .ai-summary-box { background: linear-gradient(145deg, #f0f9ff 0%, #e0f2fe 100%); border: 1px solid #e0f2fe; border-left-width: 4px; border-left-color: #38bdf8; color: #0c4a6e; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); }
+        .ai-summary-content p { margin-bottom: 0.75rem; }
+        .ai-summary-content strong { font-weight: 600; color: #0369a1; }
+        .ai-summary-content em { font-style: italic; }
+        .ai-summary-content ul, .ai-summary-content ol { margin-left: 1.25rem; margin-bottom: 0.75rem; }
+        .ai-summary-content li { margin-bottom: 0.25rem; }
+        .salary-info-box { background-color: #f0fdfa; border: 1px solid #a7f3d0; border-left-width: 4px; border-left-color: #10b981; color: #065f46; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); }
+        /* Save Button Style (used in index.html) */
+        .save-btn {
+            background-color: #ecfdf5; /* Light green background (emerald-50) */
+            color: #065f46; /* Dark green text (emerald-800) */
+            border: 1px solid #a7f3d0; /* Light green border (emerald-200) */
+            padding: 0.3rem 0.6rem;
+            font-size: 0.75rem;
+            border-radius: 0.375rem;
+            font-weight: 500;
+            transition: all 0.15s ease-in-out;
+        }
+        .save-btn:hover {
+            background-color: #d1fae5; /* Slightly darker green background on hover (emerald-100) */
+            border-color: #6ee7b7; /* Darker green border on hover (emerald-300) */
+            color: #047857; /* Slightly darker green text on hover (emerald-700) */
+        }
+        .action-btn { /* Base class for save/saved buttons */
+            padding: 0.3rem 0.6rem;
+            font-size: 0.75rem;
+            border-radius: 0.375rem;
+            font-weight: 500;
+            transition: all 0.15s ease-in-out;
+            display: inline-flex; /* Align icon and text */
+            align-items: center;
+            gap: 0.3rem; /* Space between icon and text */
+        }
+        .line-clamp-3 { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased">
+    <div class="flex flex-col min-h-screen">
+
+        {% block navigation %}
+        <nav class="bg-white shadow-sm border-b border-slate-200 sticky top-0 z-10">
+             <div class="container mx-auto px-4 max-w-5xl">
+                 <div class="flex justify-between items-center py-3">
+                     <a href="{{ url_for('home') }}" class="text-xl font-bold text-indigo-600 hover:text-indigo-700 transition-all-ease">Job Insights</a>
+                     <div class="flex items-center space-x-4">
+                         {% if current_user.is_authenticated %}
+                             <span class="text-sm text-slate-600 hidden sm:inline">Welcome, {{ current_user.email }}</span> {# Hide on small screens #}
+                             <a href="{{ url_for('saved_jobs_list') }}" class="text-sm font-medium text-slate-600 hover:text-indigo-600 transition-all-ease">Saved Jobs</a>
+                             <a href="{{ url_for('logout') }}" class="text-sm font-medium text-slate-600 hover:text-indigo-600 transition-all-ease">Logout</a>
+                         {% else %}
+                             <a href="{{ url_for('login') }}" class="text-sm font-medium text-slate-600 hover:text-indigo-600 transition-all-ease">Login</a>
+                             <a href="{{ url_for('register') }}" class="text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 rounded-md transition-all-ease">Register</a>
+                         {% endif %}
+                     </div>
+                 </div>
+             </div>
+         </nav>
+        {% endblock navigation %}
+
+        <main class="flex-grow">
+            {% block content %}
+            {% endblock content %}
+        </main>
+
+        <footer class="text-center py-6 mt-auto border-t border-slate-200 bg-white">
+             <p class="text-sm text-slate-500">
+                 Powered by <a href="https://developer.adzuna.com/" target="_blank" rel="noopener noreferrer" class="text-indigo-600 hover:underline font-medium">Adzuna API</a> & Azure AI
+             </p>
+        </footer>
+    </div>
+    </body>
+</html>

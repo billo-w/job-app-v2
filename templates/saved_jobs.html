@@ -1,101 +1,67 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ title }} - Job Insights</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; /* bg-slate-50 */ }
-        .job-card:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.07), 0 4px 6px -4px rgb(0 0 0 / 0.07); }
-        .transition-all-ease { transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
-        .flash-message { border-radius: 0.5rem; padding: 1rem; margin-bottom: 1.5rem; border-left-width: 4px; font-weight: 500; box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.07), 0 1px 2px -1px rgb(0 0 0 / 0.07); }
-        .flash-error { background-color: #fef2f2; color: #b91c1c; border-color: #ef4444; }
-        .flash-success { background-color: #f0fdf4; color: #15803d; border-color: #22c55e; }
-        .flash-info { background-color: #eff6ff; color: #1d4ed8; border-color: #60a5fa; }
-        /* Unsave Button Style */
-        .unsave-btn { color: #ef4444; } .unsave-btn:hover { color: #dc2626; }
-    </style>
-</head>
-<body class="bg-slate-50 text-slate-800 antialiased">
-    <nav class="bg-white shadow-sm border-b border-slate-200 sticky top-0 z-10">
-        <div class="container mx-auto px-4 max-w-5xl">
-            <div class="flex justify-between items-center py-3">
-                <a href="{{ url_for('home') }}" class="text-xl font-bold text-indigo-600 hover:text-indigo-700 transition-all-ease">Job Insights</a>
-                 <div class="flex items-center space-x-4">
-                    {% if current_user.is_authenticated %}
-                        <a href="{{ url_for('home') }}" class="text-sm font-medium text-slate-600 hover:text-indigo-600 transition-all-ease">Search</a>
-                        <a href="{{ url_for('saved_jobs_list') }}" class="text-sm font-medium text-indigo-600 hover:text-indigo-700 transition-all-ease">Saved Jobs</a>
-                        <a href="{{ url_for('logout') }}" class="text-sm font-medium text-slate-600 hover:text-indigo-600 transition-all-ease">Logout</a>
-                    {% else %}
-                         <a href="{{ url_for('login') }}" class="text-sm font-medium text-slate-600 hover:text-indigo-600 transition-all-ease">Login</a>
-                        <a href="{{ url_for('register') }}" class="text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 rounded-md transition-all-ease">Register</a>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-    </nav>
+{% extends "base.html" %}
 
-    <div class="container mx-auto px-4 py-10 md:py-12 max-w-5xl">
-        <header class="mb-10 md:mb-12 border-b border-slate-200 pb-4">
-            <h1 class="text-3xl font-bold text-slate-800">Your Saved Jobs</h1>
-            <p class="text-slate-500 mt-1">Review the jobs you've saved from your searches.</p>
-        </header>
+{% block title %}Saved Jobs - {{ super() }}{% endblock %}
 
-         {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                     <div class="flash-message flash-{{ category | default('info') }} mb-6" role="alert">
-                        {{ message }}
-                    </div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
+{% block navigation %}
+    {{ super() }}
+{% endblock %}
 
-        {% if jobs %}
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {% for job in jobs %}
-                <div class="job-card bg-white border border-slate-200/80 p-5 rounded-lg shadow-sm transition-all-ease flex flex-col justify-between">
-                    <div>
-                        <h4 class="text-lg font-semibold text-indigo-700 hover:text-indigo-800 mb-1.5">
-                            <a href="{{ job.adzuna_url }}" target="_blank" rel="noopener noreferrer" class="hover:underline">{{ job.title }}</a>
-                        </h4>
-                        <div class="text-sm text-slate-600 mb-3 space-y-1">
-                            <p><i class="fa-regular fa-building mr-1.5 w-4 text-center opacity-70"></i> {{ job.company if job.company else 'N/A' }}</p>
-                            <p><i class="fa-solid fa-location-dot mr-1.5 w-4 text-center opacity-70"></i> {{ job.location if job.location else 'N/A' }}</p>
-                        </div>
-                        </div>
-                    <div class="flex justify-between items-center mt-3 pt-4 border-t border-slate-100">
-                         <form action="{{ url_for('unsave_job') }}" method="POST" class="inline">
-                            <input type="hidden" name="adzuna_job_id" value="{{ job.adzuna_job_id }}">
-                            <button type="submit" class="text-sm unsave-btn font-medium transition-all-ease group flex items-center" title="Remove job">
-                                <i class="fas fa-trash-can mr-1 group-hover:text-red-700"></i> Remove
-                            </button>
-                        </form>
-                        <a href="{{ job.adzuna_url }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center text-sm text-indigo-600 hover:text-indigo-800 font-medium transition-all-ease group">
-                            View Original <i class="fas fa-arrow-right text-xs ml-1.5 group-hover:translate-x-0.5 transition-transform"></i>
-                        </a>
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-        {% else %}
-             <div class="bg-white p-8 rounded-lg shadow-sm text-center text-slate-500 border border-slate-200/80">
-                <i class="fas fa-inbox fa-3x text-slate-400 mb-4"></i>
-                <p class="text-xl font-medium text-slate-700">No Saved Jobs Yet</p>
-                <p class="text-sm mt-2 mb-4">Go back to the search page to find and save jobs that interest you.</p>
-                <a href="{{ url_for('home') }}" class="inline-flex items-center justify-center py-2 px-5 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-500 transition-all-ease">
-                    <i class="fas fa-search mr-2"></i> Start Searching
-                </a>
-            </div>
+{% block content %}
+<div class="container mx-auto px-4 py-10 md:py-12 max-w-5xl">
+    <header class="mb-10 md:mb-12 border-b border-slate-200 pb-4">
+        <h1 class="text-3xl font-bold text-slate-800">Your Saved Jobs</h1>
+        <p class="text-slate-500 mt-1">Review the jobs you've saved from your searches.</p>
+    </header>
+
+     {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+             <div class="max-w-3xl mx-auto mb-8"> {# Added margin-bottom #}
+                 {% for category, message in messages %}
+                      <div class="flash-message flash-{{ category | default('info') }}" role="alert">
+                         {{ message }}
+                     </div>
+                 {% endfor %}
+             </div>
         {% endif %}
-    </div>
+    {% endwith %}
 
-     <footer class="text-center mt-16 mb-8"> <p class="text-sm text-slate-500"> Powered by Adzuna API & Azure AI </p> </footer>
+    {% if jobs %}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {% for job in jobs %}
+            <div class="job-card bg-white border border-slate-200/80 p-5 rounded-lg shadow-sm transition-all-ease flex flex-col justify-between">
+                <div>
+                    <h4 class="text-lg font-semibold text-indigo-700 hover:text-indigo-800 mb-1.5">
+                        <a href="{{ job.adzuna_url }}" target="_blank" rel="noopener noreferrer" class="hover:underline">{{ job.title }}</a>
+                    </h4>
+                    <div class="text-sm text-slate-600 mb-3 space-y-1">
+                        <p><i class="fa-regular fa-building mr-1.5 w-4 text-center opacity-70"></i> {{ job.company if job.company else 'N/A' }}</p>
+                        <p><i class="fa-solid fa-location-dot mr-1.5 w-4 text-center opacity-70"></i> {{ job.location if job.location else 'N/A' }}</p>
+                    </div>
+                 </div>
+                 <div class="flex justify-between items-center mt-3 pt-4 border-t border-slate-100">
+                     <form action="{{ url_for('unsave_job') }}" method="POST" class="inline">
+                        <input type="hidden" name="adzuna_job_id" value="{{ job.adzuna_job_id }}">
+                        <button type="submit" class="action-btn unsave-btn" title="Remove job">
+                            <i class="fas fa-trash-can"></i> Remove
+                        </button>
+                    </form>
+                    <a href="{{ job.adzuna_url }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center text-sm text-indigo-600 hover:text-indigo-800 font-medium transition-all-ease group">
+                        View Original <i class="fas fa-arrow-right text-xs ml-1.5 group-hover:translate-x-0.5 transition-transform"></i>
+                    </a>
+                </div>
+            </div>
+            {% endfor %} {# End job loop #}
+        </div>
+    {% else %}
+        <div class="bg-white p-8 rounded-lg shadow-sm text-center text-slate-500 border border-slate-200/80">
+            <i class="fas fa-inbox fa-3x text-slate-400 mb-4"></i>
+            <p class="text-xl font-medium text-slate-700">No Saved Jobs Yet</p>
+            <p class="text-sm mt-2 mb-4">Go back to the search page to find and save jobs that interest you.</p>
+            <a href="{{ url_for('home') }}" class="inline-flex items-center justify-center py-2 px-5 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-500 transition-all-ease">
+                <i class="fas fa-search mr-2"></i> Start Searching
+            </a>
+        </div>
+    {% endif %} {# End jobs check #}
+</div>
+{% endblock %}
 
-</body>
-</html>

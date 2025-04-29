@@ -1,80 +1,70 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ title }} - Job Insights</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; /* bg-slate-50 */ }
-        .flash-message { border-radius: 0.5rem; padding: 1rem; margin-bottom: 1.5rem; border-left-width: 4px; font-weight: 500; box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.07), 0 1px 2px -1px rgb(0 0 0 / 0.07); }
-        .flash-error { background-color: #fef2f2; color: #b91c1c; border-color: #ef4444; }
-        .flash-success { background-color: #f0fdf4; color: #15803d; border-color: #22c55e; }
-        .flash-info { background-color: #eff6ff; color: #1d4ed8; border-color: #60a5fa; }
-        input[type="email"]:focus, input[type="password"]:focus { box-shadow: 0 0 0 2px #c7d2fe; border-color: #6366f1; }
-        button[type="submit"]:hover { background-color: #4338ca; }
-        button[type="submit"]:focus-visible { outline: 2px solid #a5b4fc; outline-offset: 2px; }
-    </style>
-</head>
-<body class="bg-slate-50 text-slate-800 antialiased">
-    <div class="flex flex-col min-h-screen">
-        <header class="py-4 text-center border-b border-slate-200 bg-white">
-             <a href="{{ url_for('home') }}" class="text-2xl font-bold text-indigo-600 hover:text-indigo-700">Job Insights</a>
-        </header>
+{% extends "base.html" %}
 
-        <main class="flex-grow container mx-auto px-4 py-12 md:py-16 max-w-md">
-            <h1 class="text-3xl font-bold text-center text-slate-800 mb-8">Register New Account</h1>
+{% block title %}Register - {{ super() }}{% endblock %}
 
-            {% with messages = get_flashed_messages(with_categories=true) %}
-                {% if messages %}
-                    {% for category, message in messages %}
-                        <div class="flash-message flash-{{ category | default('info') }}" role="alert">
-                            {{ message }}
-                        </div>
-                    {% endfor %}
-                {% endif %}
-            {% endwith %}
+{% block navigation %}
+    <header class="py-4 text-center border-b border-slate-200 bg-white shadow-sm">
+         <a href="{{ url_for('home') }}" class="text-2xl font-bold text-indigo-600 hover:text-indigo-700 transition-colors duration-200">Job Insights</a>
+    </header>
+{% endblock %}
 
-            <div class="bg-white p-8 rounded-xl shadow-lg border border-slate-200/80">
-                <form method="POST" action="{{ url_for('register') }}" novalidate>
-                    {{ form.hidden_tag() }} {# Required for CSRF protection #}
-                    <div class="mb-5">
-                        {{ form.email.label(class="block text-sm font-medium text-slate-700 mb-1.5") }}
-                        {{ form.email(class="w-full px-4 py-2.5 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm", placeholder="you@example.com") }}
-                        {% for error in form.email.errors %}
-                            <p class="text-red-600 text-xs mt-1">{{ error }}</p>
-                        {% endfor %}
-                    </div>
-                    <div class="mb-5">
-                        {{ form.password.label(class="block text-sm font-medium text-slate-700 mb-1.5") }}
-                        {{ form.password(class="w-full px-4 py-2.5 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm") }}
-                         {% for error in form.password.errors %}
-                            <p class="text-red-600 text-xs mt-1">{{ error }}</p>
-                        {% endfor %}
-                    </div>
-                    <div class="mb-6">
-                        {{ form.confirm_password.label(class="block text-sm font-medium text-slate-700 mb-1.5") }}
-                        {{ form.confirm_password(class="w-full px-4 py-2.5 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm") }}
-                         {% for error in form.confirm_password.errors %}
-                            <p class="text-red-600 text-xs mt-1">{{ error }}</p>
-                        {% endfor %}
-                    </div>
-                    <div class="text-center pt-2">
-                         {{ form.submit(class="w-full py-3 px-6 border border-transparent rounded-lg shadow-md text-base font-semibold text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-500 cursor-pointer transform transition-all duration-150 ease-in-out hover:-translate-y-0.5") }}
-                    </div>
-                </form>
+{% block content %}
+<div class="container mx-auto px-4 py-12 md:py-16 max-w-md">
+    <h1 class="text-3xl font-bold text-center text-slate-800 mb-8">Register New Account</h1>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="flash-message flash-{{ category | default('info') }} mb-6" role="alert">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="bg-white p-8 rounded-xl shadow-lg border border-slate-200/80">
+        <form method="POST" action="{{ url_for('register') }}" novalidate>
+            {{ form.hidden_tag() }} {# Required for CSRF protection #}
+
+            <div class="mb-5">
+                {{ form.email.label(class="block text-sm font-medium text-slate-700 mb-1.5") }}
+                {{ form.email(class="w-full px-4 py-2.5 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition duration-150 ease-in-out text-sm", placeholder="you@example.com", required=true, autofocus=true) }}
+                {% for error in form.email.errors %}
+                    <p class="text-red-600 text-xs mt-1.5 flex items-center">
+                        <i class="fas fa-exclamation-circle mr-1.5 text-xs"></i>{{ error }}
+                    </p>
+                {% endfor %}
             </div>
-            <p class="text-center text-sm text-slate-600 mt-6">
-                Already have an account? <a href="{{ url_for('login') }}" class="font-medium text-indigo-600 hover:text-indigo-500">Login here</a>
-            </p>
-        </main>
 
-        <footer class="text-center py-6 mt-auto">
-            <p class="text-sm text-slate-500">Powered by Adzuna API & Azure AI</p>
-        </footer>
+            <div class="mb-5">
+                {{ form.password.label(class="block text-sm font-medium text-slate-700 mb-1.5") }}
+                {{ form.password(class="w-full px-4 py-2.5 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition duration-150 ease-in-out text-sm", placeholder="Choose a strong password (min 8 chars)", required=true) }}
+                 {% for error in form.password.errors %}
+                     <p class="text-red-600 text-xs mt-1.5 flex items-center">
+                        <i class="fas fa-exclamation-circle mr-1.5 text-xs"></i>{{ error }}
+                    </p>
+                {% endfor %}
+            </div>
+
+            <div class="mb-6">
+                {{ form.confirm_password.label(class="block text-sm font-medium text-slate-700 mb-1.5") }}
+                {{ form.confirm_password(class="w-full px-4 py-2.5 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition duration-150 ease-in-out text-sm", placeholder="Enter the same password again", required=true) }}
+                 {% for error in form.confirm_password.errors %}
+                    <p class="text-red-600 text-xs mt-1.5 flex items-center">
+                        <i class="fas fa-exclamation-circle mr-1.5 text-xs"></i>{{ error }}
+                    </p>
+                {% endfor %}
+            </div>
+
+            <div class="text-center pt-2">
+                 {{ form.submit(class="w-full inline-flex items-center justify-center py-3 px-6 border border-transparent rounded-lg shadow-md text-base font-semibold text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-500 cursor-pointer") }}
+            </div>
+        </form>
     </div>
-</body>
-</html>
+
+    <p class="text-center text-sm text-slate-600 mt-6">
+        Already have an account? <a href="{{ url_for('login') }}" class="font-medium text-indigo-600 hover:text-indigo-500">Login here</a>
+    </p>
+</div>
+{% endblock %}
+
