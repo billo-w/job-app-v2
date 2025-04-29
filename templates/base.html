@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{% block title %}Job Insights{% endblock %}</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -30,11 +31,6 @@
             color: #ef4444; /* Default text color (red-500) */
             background-color: transparent; /* Default background */
             border: 1px solid #fecaca; /* Default border (red-200) */
-            padding: 0.3rem 0.6rem;
-            font-size: 0.75rem;
-            border-radius: 0.375rem;
-            font-weight: 500;
-            transition: all 0.15s ease-in-out;
         }
         .unsave-btn:hover {
             color: #dc2626; /* Darker red text on hover (red-600) */
@@ -64,18 +60,13 @@
             background-color: #ecfdf5; /* Light green background (emerald-50) */
             color: #065f46; /* Dark green text (emerald-800) */
             border: 1px solid #a7f3d0; /* Light green border (emerald-200) */
-            padding: 0.3rem 0.6rem;
-            font-size: 0.75rem;
-            border-radius: 0.375rem;
-            font-weight: 500;
-            transition: all 0.15s ease-in-out;
         }
         .save-btn:hover {
             background-color: #d1fae5; /* Slightly darker green background on hover (emerald-100) */
             border-color: #6ee7b7; /* Darker green border on hover (emerald-300) */
             color: #047857; /* Slightly darker green text on hover (emerald-700) */
         }
-        .action-btn { /* Base class for save/saved buttons */
+        .action-btn { /* Base class for save/saved/unsave buttons */
             padding: 0.3rem 0.6rem;
             font-size: 0.75rem;
             border-radius: 0.375rem;
@@ -84,8 +75,25 @@
             display: inline-flex; /* Align icon and text */
             align-items: center;
             gap: 0.3rem; /* Space between icon and text */
+            cursor: pointer; /* Indicate clickable */
+        }
+        .action-btn:disabled { /* Style for disabled button during AJAX */
+            opacity: 0.6;
+            cursor: not-allowed;
         }
         .line-clamp-3 { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+        /* Small feedback message style */
+        .feedback-message {
+            font-size: 0.7rem;
+            padding: 0.1rem 0.4rem;
+            border-radius: 0.25rem;
+            margin-left: 0.5rem;
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+        }
+        .feedback-success { background-color: #d1fae5; color: #047857; }
+        .feedback-error { background-color: #fee2e2; color: #991b1b; }
+        .feedback-message.show { opacity: 1; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 antialiased">
@@ -122,5 +130,9 @@
              </p>
         </footer>
     </div>
-    </body>
+
+    {% block scripts %}
+    {% endblock scripts %}
+</body>
 </html>
+

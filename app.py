@@ -1,20 +1,21 @@
 import os
 import requests
 from flask import (Flask, request, jsonify, render_template, flash, redirect,
-                   url_for, session) # Added redirect, url_for, session
+                   url_for, session) # Added jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_login import (LoginManager, UserMixin, login_user, logout_user,
-                         login_required, current_user) # Added Flask-Login imports
-from flask_wtf import FlaskForm # Added Flask-WTF
-from wtforms import StringField, PasswordField, SubmitField, BooleanField # Added BooleanField
-from wtforms.validators import DataRequired, Email, EqualTo, Length, ValidationError # Added validators
-from werkzeug.security import generate_password_hash, check_password_hash # For passwords
+                         login_required, current_user)
+from flask_wtf import FlaskForm
+from flask_wtf.csrf import CSRFProtect, generate_csrf # Import CSRFProtect and generate_csrf
+from wtforms import StringField, PasswordField, SubmitField, BooleanField
+from wtforms.validators import DataRequired, Email, EqualTo, Length, ValidationError
+from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 import logging
 import markdown
 from markupsafe import Markup
-from urllib.parse import urlparse, parse_qs # To extract Adzuna job key
+from urllib.parse import urlparse, parse_qs
 
 # --- Basic Setup ---
 logging.basicConfig(level=logging.INFO)
@@ -26,16 +27,18 @@ app = Flask(__name__, template_folder='templates')
 # --- Configuration ---
 app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'a_very_secret_dev_key')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
-# Recommended settings for SQLAlchemy
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ECHO'] = False # Set to True for debugging SQL queries
+# Optional: Configure WTF_CSRF_ENABLED (default is True)
+# app.config['WTF_CSRF_ENABLED'] = True
 
 # --- Extensions Initialization ---
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 login_manager = LoginManager(app)
-login_manager.login_view = 'login' # Redirect to 'login' route if @login_required fails
-login_manager.login_message_category = 'info' # Flash message category
+csrf = CSRFProtect(app) # Initialize CSRF protection
+login_manager.login_view = 'login'
+login_manager.login_message_category = 'info'
 
 # --- Adzuna & AI Configuration ---
 ADZUNA_APP_ID = os.getenv('ADZUNA_APP_ID')
@@ -46,13 +49,11 @@ AZURE_AI_ENDPOINT = os.getenv('AZURE_AI_ENDPOINT')
 AZURE_AI_KEY = os.getenv('AZURE_AI_KEY')
 
 # --- Database Models ---
-
-# User Model implementing UserMixin for Flask-Login compatibility
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash = db.Column(db.String(255), nullable=False) # Increased length
-    saved_jobs = db.relationship('SavedJob', backref='user', lazy=True, cascade="all, delete-orphan") # Relationship
+    password_hash = db.Column(db.String(255), nullable=False)
+    saved_jobs = db.relationship('SavedJob', backref='user', lazy=True, cascade="all, delete-orphan")
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -63,16 +64,14 @@ class User(UserMixin, db.Model):
     def __repr__(self):
         return f'<User {self.email}>'
 
-# SavedJob Model
 class SavedJob(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    adzuna_job_id = db.Column(db.String(100), nullable=False) # Store Adzuna's unique ID
+    adzuna_job_id = db.Column(db.String(100), nullable=False)
     title = db.Column(db.String(200), nullable=False)
     company = db.Column(db.String(150))
     location = db.Column(db.String(150))
-    adzuna_url = db.Column(db.String(500)) # Store the Adzuna redirect URL
+    adzuna_url = db.Column(db.String(500))
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    # Ensure a user cannot save the same job twice
     __table_args__ = (db.UniqueConstraint('user_id', 'adzuna_job_id', name='_user_job_uc'),)
 
     def __repr__(self):
@@ -81,10 +80,12 @@ class SavedJob(db.Model):
 # --- Flask-Login User Loader ---
 @login_manager.user_loader
 def load_user(user_id):
-    """Callback used by Flask-Login to reload the user object from the user ID stored in the session."""
     return User.query.get(int(user_id))
 
 # --- Forms (using Flask-WTF) ---
+# Note: CSRF protection is handled globally by Flask-WTF/CSRFProtect
+# but forms still need the hidden tag rendered in the template.
+# For AJAX, we send the token via headers.
 
 class RegistrationForm(FlaskForm):
     email = StringField('Email', validators=[DataRequired(), Email()])
@@ -92,7 +93,6 @@ class RegistrationForm(FlaskForm):
     confirm_password = PasswordField('Confirm Password', validators=[DataRequired(), EqualTo('password', message='Passwords must match.')])
     submit = SubmitField('Register')
 
-    # Custom validator to check if email already exists
     def validate_email(self, email):
         user = User.query.filter_by(email=email.data).first()
         if user:
@@ -101,11 +101,13 @@ class RegistrationForm(FlaskForm):
 class LoginForm(FlaskForm):
     email = StringField('Email', validators=[DataRequired(), Email()])
     password = PasswordField('Password', validators=[DataRequired()])
-    remember = BooleanField('Remember Me') # Added remember field
+    remember = BooleanField('Remember Me')
     submit = SubmitField('Login')
 
 # --- Helper Functions (Adzuna, AI, Data Fetching) ---
-
+# Keep get_salary_histogram, get_ai_summary, extract_adzuna_job_id,
+# and fetch_market_insights functions as they were in the PRG version.
+# (Code omitted for brevity, assume they are present and correct)
 def get_salary_histogram(country_code, location, job_title):
     """ Fetches salary histogram data from Adzuna. """
     if not ADZUNA_APP_ID or not ADZUNA_APP_KEY: return None
@@ -137,19 +139,16 @@ def get_salary_histogram(country_code, location, job_title):
             return None
     except requests.exceptions.Timeout:
         app.logger.error("Adzuna histogram request timed out.")
-        flash("Salary data request timed out.", "warning")
+        # Avoid flashing here for AJAX, return None or specific error info
         return None
     except requests.exceptions.HTTPError as e:
         app.logger.error(f"Adzuna histogram HTTP Error: {e.response.status_code}.")
-        flash(f"Could not fetch salary data (API Error {e.response.status_code}).", "warning")
         return None
     except requests.exceptions.RequestException as e:
         app.logger.error(f"Adzuna histogram connection error: {e}")
-        flash("Could not connect to Adzuna for salary data.", "warning")
         return None
     except Exception as e:
         app.logger.error(f"Unexpected error fetching salary histogram: {e}")
-        flash("An unexpected error occurred while fetching salary data.", "warning")
         return None
 
 
@@ -217,19 +216,16 @@ def get_ai_summary(query_details, total_jobs, job_listings_sample, salary_data):
             return None
     except requests.exceptions.Timeout:
         app.logger.error("Azure AI request timed out.")
-        flash("AI summary request timed out.", "warning")
+        # Avoid flashing here for AJAX
         return None
     except requests.exceptions.HTTPError as e:
         app.logger.error(f"Azure AI HTTP Error: {e.response.status_code}.")
-        flash(f"Could not generate AI summary (AI Service Error {e.response.status_code}).", "warning")
         return None
     except requests.exceptions.RequestException as e:
         app.logger.error(f"Azure AI connection error: {e}")
-        flash("Could not connect to the AI service for summary.", "warning")
         return None
     except Exception as e:
         app.logger.error(f"Unexpected error calling Azure AI endpoint: {e}")
-        flash("An unexpected error occurred while generating the AI summary.", "warning")
         return None
 
 
@@ -239,24 +235,17 @@ def extract_adzuna_job_id(url):
         return None
     try:
         parsed_url = urlparse(url)
-        # Adzuna job ID is often the last path component before query params
         path_parts = parsed_url.path.strip('/').split('/')
         if path_parts:
-            # Check if the last part looks like a job ID (often numeric or alphanumeric)
             potential_id = path_parts[-1]
-            # Basic check: adjust if Adzuna ID format is different
-            # Ensure it's primarily numeric or alphanumeric and has a reasonable length
             if potential_id.isalnum() and len(potential_id) > 5:
                  return potential_id
-        # Fallback: Check query parameters (less common for ID, but possible)
         query_params = parse_qs(parsed_url.query)
-        if 'aid' in query_params: return query_params['aid'][0] # Check common Adzuna param
+        if 'aid' in query_params: return query_params['aid'][0]
         if 'jobId' in query_params: return query_params['jobId'][0]
         if 'id' in query_params: return query_params['id'][0]
-
         app.logger.warning(f"Could not extract Adzuna job ID from URL path or common query params: {url}")
-        return None # Return None if ID cannot be reliably extracted
-
+        return None
     except Exception as e:
         app.logger.error(f"Error parsing Adzuna URL {url}: {e}")
         return None
@@ -266,6 +255,7 @@ def fetch_market_insights(what, where, country):
     """
     Fetches job listings, salary data, and AI summary based on search criteria.
     Returns an 'insights_data' dictionary or None if a critical error occurs.
+    Handles flashing messages for user feedback during page loads.
     """
     if not all([what, where, country]):
         flash("Missing search criteria.", "error")
@@ -315,6 +305,7 @@ def fetch_market_insights(what, where, country):
                 app.logger.warning(f"Skipping job due to missing Adzuna ID: {job.get('title')}")
 
         # --- Call Adzuna Histogram & Azure AI ---
+        # Pass errors from helpers up if needed, or let them return None
         salary_data = get_salary_histogram(country, where, what)
         ai_summary_raw = get_ai_summary(query_details, total_jobs, job_listings[:10], salary_data) # Pass limited sample
         if ai_summary_raw:
@@ -347,9 +338,9 @@ def fetch_market_insights(what, where, country):
         flash("An internal server error occurred while fetching insights.", "error")
         return None
 
-
 # --- Routes ---
 
+# Keep home() and get_insights() routes as they were in the PRG version
 @app.route('/')
 def home():
     """
@@ -374,10 +365,14 @@ def home():
     if current_user.is_authenticated:
         saved_job_ids = {job.adzuna_job_id for job in current_user.saved_jobs}
 
+    # Generate CSRF token if needed explicitly (Flask-WTF usually handles it)
+    # csrf_token_value = generate_csrf()
+
     return render_template('index.html',
                            insights=insights_data,
                            form_data=form_data, # Pass form_data to pre-fill search boxes
                            saved_job_ids=saved_job_ids)
+                           # csrf_token=csrf_token_value) # Pass token if needed explicitly
 
 
 @app.route('/insights', methods=['POST'])
@@ -400,7 +395,8 @@ def get_insights():
 
 
 # --- Authentication Routes ---
-
+# Keep register(), login(), logout() as they were in the PRG version
+# (Code omitted for brevity)
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if current_user.is_authenticated:
@@ -459,116 +455,89 @@ def logout():
     flash('You have been logged out.', 'success')
     return redirect(url_for('home'))
 
-# --- Saved Jobs Routes ---
+# --- Saved Jobs Routes (AJAX Handlers) ---
 
 @app.route('/save_job', methods=['POST'])
-@login_required # Protect this route
+@login_required
 def save_job():
-    # Job details
-    adzuna_job_id = request.form.get('adzuna_job_id')
-    title = request.form.get('title')
-    company = request.form.get('company')
-    location = request.form.get('location')
-    adzuna_url = request.form.get('adzuna_url')
-    # Search context for redirect
-    what = request.form.get('what')
-    where = request.form.get('where')
-    country = request.form.get('country')
+    """Handles AJAX request to save a job."""
+    data = request.get_json()
+    if not data:
+        return jsonify({'status': 'error', 'message': 'Invalid request format.'}), 400
+
+    adzuna_job_id = data.get('adzuna_job_id')
+    title = data.get('title')
+    company = data.get('company')
+    location = data.get('location')
+    adzuna_url = data.get('adzuna_url')
 
     if not all([adzuna_job_id, title, adzuna_url]):
-        flash('Missing job details to save.', 'error')
-        # Try to redirect back with context if possible, else home
-        if all([what, where, country]):
-             return redirect(url_for('home', what=what, where=where, country=country))
-        else:
-             return redirect(url_for('home'))
+        return jsonify({'status': 'error', 'message': 'Missing job details.'}), 400
 
     # Check if already saved
     existing_save = SavedJob.query.filter_by(user_id=current_user.id, adzuna_job_id=adzuna_job_id).first()
     if existing_save:
-        flash('Job already saved.', 'info')
-    else:
-        # Create and save the job
-        saved_job = SavedJob(
-            adzuna_job_id=adzuna_job_id, title=title, company=company,
-            location=location, adzuna_url=adzuna_url, user_id=current_user.id
-        )
-        db.session.add(saved_job)
-        try:
-            db.session.commit()
-            flash('Job saved successfully!', 'success')
-            app.logger.info(f"User {current_user.id} saved job {adzuna_job_id}")
-        except Exception as e:
-            db.session.rollback()
-            app.logger.error(f"Error saving job {adzuna_job_id} for user {current_user.id}: {e}")
-            flash('Error saving job. Please try again.', 'error')
+        return jsonify({'status': 'error', 'message': 'Job already saved.'}), 409 # 409 Conflict
 
-    # Redirect back to the search results page using the context
-    if all([what, where, country]):
-        return redirect(url_for('home', what=what, where=where, country=country))
-    else:
-        # Fallback if context is missing (shouldn't happen from index)
-        app.logger.warning("Save job request missing search context for redirect. Falling back to home.")
-        return redirect(url_for('home'))
+    # Create and save the job
+    saved_job = SavedJob(
+        adzuna_job_id=adzuna_job_id, title=title, company=company,
+        location=location, adzuna_url=adzuna_url, user_id=current_user.id
+    )
+    db.session.add(saved_job)
+    try:
+        db.session.commit()
+        app.logger.info(f"User {current_user.id} saved job {adzuna_job_id} via AJAX")
+        return jsonify({'status': 'success', 'message': 'Job saved!'})
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error saving job {adzuna_job_id} for user {current_user.id} via AJAX: {e}")
+        return jsonify({'status': 'error', 'message': 'Database error saving job.'}), 500
 
 
 @app.route('/unsave_job', methods=['POST'])
-@login_required # Protect this route
+@login_required
 def unsave_job():
-    adzuna_job_id = request.form.get('adzuna_job_id')
-    # Search context for redirect (might be present if unsaving from index)
-    what = request.form.get('what')
-    where = request.form.get('where')
-    country = request.form.get('country')
+    """Handles AJAX request to unsave a job."""
+    data = request.get_json()
+    if not data:
+        return jsonify({'status': 'error', 'message': 'Invalid request format.'}), 400
 
-    redirect_url = url_for('saved_jobs_list') # Default redirect for unsave from saved_jobs page
-
-    # If search context is present, redirect back to search results instead
-    if all([what, where, country]):
-        redirect_url = url_for('home', what=what, where=where, country=country)
-        app.logger.info(f"Unsaving job from search context: {what}, {where}, {country}")
-    else:
-         app.logger.info("Unsaving job from saved jobs list or unknown context.")
-
-
+    adzuna_job_id = data.get('adzuna_job_id')
     if not adzuna_job_id:
-        flash('Missing job ID to unsave.', 'error')
-        return redirect(redirect_url) # Redirect back appropriately
+        return jsonify({'status': 'error', 'message': 'Missing job ID.'}), 400
 
     job_to_unsave = SavedJob.query.filter_by(user_id=current_user.id, adzuna_job_id=adzuna_job_id).first()
     if job_to_unsave:
         db.session.delete(job_to_unsave)
         try:
             db.session.commit()
-            flash('Job removed from saved list.', 'success')
-            app.logger.info(f"User {current_user.id} unsaved job {adzuna_job_id}")
+            app.logger.info(f"User {current_user.id} unsaved job {adzuna_job_id} via AJAX")
+            return jsonify({'status': 'success', 'message': 'Job removed.'})
         except Exception as e:
             db.session.rollback()
-            app.logger.error(f"Error unsaving job {adzuna_job_id} for user {current_user.id}: {e}")
-            flash('Error unsaving job. Please try again.', 'error')
+            app.logger.error(f"Error unsaving job {adzuna_job_id} for user {current_user.id} via AJAX: {e}")
+            return jsonify({'status': 'error', 'message': 'Database error unsaving job.'}), 500
     else:
-        flash('Job not found in your saved list.', 'warning')
+        # Job might have already been unsaved or never existed for user
+        app.logger.warning(f"Attempt to unsave non-existent/already unsaved job {adzuna_job_id} for user {current_user.id}")
+        return jsonify({'status': 'error', 'message': 'Job not found in saved list.'}), 404 # 404 Not Found
 
-    # Redirect back based on context
-    return redirect(redirect_url)
 
-
+# --- Saved Jobs Page Route (Remains standard Flask route) ---
 @app.route('/saved_jobs')
-@login_required # Protect this route
+@login_required
 def saved_jobs_list():
     """Displays the list of jobs saved by the current user."""
     jobs = SavedJob.query.filter_by(user_id=current_user.id).order_by(SavedJob.id.desc()).all()
+    # Note: Unsaving from this page still uses standard form submission
+    # unless you add AJAX handling to saved_jobs.html as well.
     return render_template('saved_jobs.html', title='Saved Jobs', jobs=jobs)
 
 
 # --- Main execution ---
 if __name__ == '__main__':
-    # Create database tables if they don't exist (useful for initial local setup)
-    # For production, rely on Flask-Migrate
-    # with app.app_context():
-    #     db.create_all() # Comment out after first run or when using migrations
-
     # Use Gunicorn or another WSGI server in production instead of app.run()
     # Debug should be False in production
-    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)), debug=False)
+    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)), debug=False) # Set debug=True for development if needed
 

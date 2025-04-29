@@ -120,31 +120,32 @@
                             </p>
                             <div class="flex items-center space-x-2">
                                 {% if current_user.is_authenticated %}
-                                    {% if job.adzuna_job_id in saved_job_ids %}
-                                        <form action="{{ url_for('unsave_job') }}" method="POST" class="inline">
-                                            <input type="hidden" name="adzuna_job_id" value="{{ job.adzuna_job_id }}">
-                                            <input type="hidden" name="what" value="{{ insights.query.what }}">
-                                            <input type="hidden" name="where" value="{{ insights.query.where }}">
-                                            <input type="hidden" name="country" value="{{ insights.query.country }}">
-                                            <button type="submit" class="action-btn saved-btn" title="Remove from saved jobs">
+                                    <span class="save-job-container relative"> {# Container for button and feedback #}
+                                        {% if job.adzuna_job_id in saved_job_ids %}
+                                            <button type="button" class="action-btn saved-btn save-toggle-btn"
+                                                    data-action="unsave"
+                                                    data-job-id="{{ job.adzuna_job_id }}"
+                                                    data-save-url="{{ url_for('save_job') }}"
+                                                    data-unsave-url="{{ url_for('unsave_job') }}"
+                                                    title="Remove from saved jobs">
                                                 <i class="fas fa-bookmark"></i> Saved
                                             </button>
-                                        </form>
-                                    {% else %}
-                                        <form action="{{ url_for('save_job') }}" method="POST" class="inline">
-                                            <input type="hidden" name="adzuna_job_id" value="{{ job.adzuna_job_id }}">
-                                            <input type="hidden" name="title" value="{{ job.title }}">
-                                            <input type="hidden" name="company" value="{{ job.company }}">
-                                            <input type="hidden" name="location" value="{{ job.location }}">
-                                            <input type="hidden" name="adzuna_url" value="{{ job.url }}">
-                                            <input type="hidden" name="what" value="{{ insights.query.what }}">
-                                            <input type="hidden" name="where" value="{{ insights.query.where }}">
-                                            <input type="hidden" name="country" value="{{ insights.query.country }}">
-                                            <button type="submit" class="action-btn save-btn" title="Save this job">
+                                        {% else %}
+                                            <button type="button" class="action-btn save-btn save-toggle-btn"
+                                                    data-action="save"
+                                                    data-job-id="{{ job.adzuna_job_id }}"
+                                                    data-title="{{ job.title }}"
+                                                    data-company="{{ job.company }}"
+                                                    data-location="{{ job.location }}"
+                                                    data-adzuna-url="{{ job.url }}"
+                                                    data-save-url="{{ url_for('save_job') }}"
+                                                    data-unsave-url="{{ url_for('unsave_job') }}"
+                                                    title="Save this job">
                                                 <i class="far fa-bookmark"></i> Save
                                             </button>
-                                        </form>
-                                    {% endif %}
+                                        {% endif %}
+                                        <span class="feedback-message absolute -top-6 right-0 whitespace-nowrap"></span> {# Feedback placeholder #}
+                                    </span>
                                 {% endif %} {# End current_user.is_authenticated check #}
                                 <a href="{{ job.url }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center text-sm text-indigo-600 hover:text-indigo-800 font-medium transition-all-ease group">
                                     View Job <i class="fas fa-arrow-right text-xs ml-1.5 group-hover:translate-x-0.5 transition-transform"></i>
@@ -171,5 +172,115 @@
     {% endif %} {# End insights check / request.method check #}
 
 </div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }} {# Include any scripts from base.html if needed #}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const saveToggleButtons = document.querySelectorAll('.save-toggle-btn');
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+    saveToggleButtons.forEach(button => {
+        button.addEventListener('click', async (event) => {
+            event.preventDefault(); // Prevent default form submission if any
+            const btn = event.currentTarget;
+            const action = btn.dataset.action; // 'save' or 'unsave'
+            const jobId = btn.dataset.jobId;
+            const saveUrl = btn.dataset.saveUrl;
+            const unsaveUrl = btn.dataset.unsaveUrl;
+            const feedbackElement = btn.nextElementSibling; // Get the sibling span for feedback
+
+            // --- Prepare data and URL ---
+            let targetUrl = '';
+            let payload = { adzuna_job_id: jobId };
+
+            if (action === 'save') {
+                targetUrl = saveUrl;
+                // Add job details needed for saving
+                payload.title = btn.dataset.title;
+                payload.company = btn.dataset.company;
+                payload.location = btn.dataset.location;
+                payload.adzuna_url = btn.dataset.adzunaUrl;
+            } else if (action === 'unsave') {
+                targetUrl = unsaveUrl;
+            } else {
+                console.error('Unknown action:', action);
+                return; // Should not happen
+            }
+
+            // --- Disable button during request ---
+            btn.disabled = true;
+            btn.style.opacity = '0.6'; // Visual feedback
+
+            // --- Clear previous feedback ---
+            if (feedbackElement) {
+                feedbackElement.textContent = '';
+                feedbackElement.classList.remove('show', 'feedback-success', 'feedback-error');
+            }
+
+            // --- Send AJAX request ---
+            try {
+                const response = await fetch(targetUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken // Include CSRF token
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.status === 'success') {
+                    // --- Update button state on success ---
+                    if (action === 'save') {
+                        btn.classList.remove('save-btn');
+                        btn.classList.add('saved-btn');
+                        btn.dataset.action = 'unsave';
+                        btn.title = 'Remove from saved jobs';
+                        btn.innerHTML = '<i class="fas fa-bookmark"></i> Saved';
+                        showFeedback(feedbackElement, 'Saved!', 'success');
+                    } else { // action === 'unsave'
+                        btn.classList.remove('saved-btn');
+                        btn.classList.add('save-btn');
+                        btn.dataset.action = 'save';
+                        btn.title = 'Save this job';
+                        btn.innerHTML = '<i class="far fa-bookmark"></i> Save';
+                        showFeedback(feedbackElement, 'Removed', 'success');
+                    }
+                } else {
+                    // --- Handle error from server ---
+                    console.error('Save/Unsave failed:', result.message || 'Unknown error');
+                    showFeedback(feedbackElement, result.message || 'Error', 'error');
+                }
+
+            } catch (error) {
+                // --- Handle network or other errors ---
+                console.error('Network error:', error);
+                showFeedback(feedbackElement, 'Network error', 'error');
+            } finally {
+                // --- Re-enable button ---
+                btn.disabled = false;
+                 btn.style.opacity = '1';
+            }
+        });
+    });
+
+    // Helper function to show feedback message
+    function showFeedback(element, message, type) {
+        if (!element) return;
+        element.textContent = message;
+        element.classList.remove('feedback-success', 'feedback-error'); // Clear previous type
+        element.classList.add(type === 'success' ? 'feedback-success' : 'feedback-error');
+        element.classList.add('show');
+
+        // Hide feedback after a few seconds
+        setTimeout(() => {
+            element.classList.remove('show');
+        }, 3000); // Hide after 3 seconds
+    }
+});
+</script>
 {% endblock %}
 
