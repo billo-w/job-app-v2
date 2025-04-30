@@ -39,7 +39,7 @@
                     </div>
                  </div>
                  <div class="flex justify-between items-center mt-3 pt-4 border-t border-slate-100">
-                     <form action="{{ url_for('unsave_job') }}" method="POST" class="inline">
+                     <form action="{{ url_for('main_bp.unsave_job') }}" method="POST" class="inline"> {# FIXED #}
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         <input type="hidden" name="adzuna_job_id" value="{{ job.adzuna_job_id }}">
                         <button type="submit" class="action-btn unsave-btn" title="Remove job">
@@ -58,11 +58,10 @@
             <i class="fas fa-inbox fa-3x text-slate-400 mb-4"></i>
             <p class="text-xl font-medium text-slate-700">No Saved Jobs Yet</p>
             <p class="text-sm mt-2 mb-4">Go back to the search page to find and save jobs that interest you.</p>
-            <a href="{{ url_for('home') }}" class="inline-flex items-center justify-center py-2 px-5 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-500 transition-all-ease">
+            <a href="{{ url_for('main_bp.home') }}" class="inline-flex items-center justify-center py-2 px-5 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-500 transition-all-ease"> {# FIXED #}
                 <i class="fas fa-search mr-2"></i> Start Searching
             </a>
         </div>
     {% endif %} {# End jobs check #}
 </div>
 {% endblock %}
-
