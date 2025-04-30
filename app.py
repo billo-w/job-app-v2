@@ -100,7 +100,8 @@ class LoginForm(FlaskForm):
 # --- Application Factory Function ---
 def create_app(config_object=None):
     """Creates and configures the Flask application."""
-    app = Flask(__name__, template_folder='templates')
+    # Use instance_relative_config=False if config files are not relative to instance folder
+    app = Flask(__name__, instance_relative_config=False, template_folder='templates')
 
     # --- Load Configuration ---
     # Default configuration
@@ -146,14 +147,16 @@ def create_app(config_object=None):
     login_manager.login_message_category = 'info'
 
     # --- Register Blueprints ---
-    # Using a blueprint helps organize routes
-    # Ensure routes.py exists and defines main_bp
+    # Use absolute import assuming routes.py is in the same directory as app.py
     try:
-        from . import routes
-        app.register_blueprint(routes.main_bp)
-    except ImportError:
+        import routes # Changed from relative import
+        app.register_blueprint(routes.main_bp) # Register the blueprint instance
+        app.logger.info("Successfully registered blueprint from routes.py")
+    except ImportError as e:
         # Handle case where routes.py might not exist yet or has issues
-        app.logger.error("Could not import or register blueprint from routes.py")
+        app.logger.error(f"Could not import or register blueprint from routes.py: {e}")
+    except AttributeError as e:
+        app.logger.error(f"Could not find 'main_bp' in routes.py: {e}")
 
 
     # --- Flask-Login User Loader (defined inside factory or imported) ---
@@ -413,14 +416,13 @@ def fetch_market_insights(what, where, country):
     return insights_data
 
 
-# --- Main execution / Create app instance ---
-# REMOVED: app = create_app() - Instance should be created by WSGI server or test runner
-
 # --- Run development server (if script is executed directly) ---
 # This block is typically NOT used in production with Gunicorn
 # It's useful for local development using `python app.py`
 if __name__ == '__main__':
     # Create an app instance ONLY when running directly
+    # Load .env for local development if needed
+    # load_dotenv() # Already called at top level
     dev_app = create_app()
     # Use the app instance created by the factory
     # debug=True is okay for local dev, but should be False in production (set via env var ideally)
