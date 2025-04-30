@@ -1,6 +1,6 @@
 import os
 import requests
-import time # Import time for token expiry
+import time # Import time (though token cache is removed)
 from flask import (Flask, request, jsonify, render_template, flash, redirect,
                    url_for, session)
 from flask_sqlalchemy import SQLAlchemy
@@ -46,17 +46,7 @@ ADZUNA_API_BASE_URL = 'https://api.adzuna.com/v1/api/jobs'
 RESULTS_PER_PAGE = 20
 AZURE_AI_ENDPOINT = os.getenv('AZURE_AI_ENDPOINT')
 AZURE_AI_KEY = os.getenv('AZURE_AI_KEY')
-# Lightcast Config
-LIGHTCAST_CLIENT_ID = os.getenv('LIGHTCAST_CLIENT_ID')
-LIGHTCAST_CLIENT_SECRET = os.getenv('LIGHTCAST_CLIENT_SECRET')
-LIGHTCAST_AUTH_URL = 'https://auth.emsicloud.com/connect/token'
-LIGHTCAST_API_BASE_URL = 'https://emsiservices.com' # Base URL for titles API
-
-# --- Simple In-Memory Cache for Lightcast Token ---
-lightcast_token_cache = {
-    "access_token": None,
-    "expires_at": 0
-}
+# Removed Lightcast Config
 
 # --- Database Models ---
 # (User and SavedJob models remain the same - omitted for brevity)
@@ -113,137 +103,6 @@ class LoginForm(FlaskForm):
     remember = BooleanField('Remember Me')
     submit = SubmitField('Login')
 
-# --- Helper Functions ---
-
-# --- Lightcast Helper Functions ---
-def get_lightcast_token():
-    """Gets a valid Lightcast access token, using cache or fetching a new one."""
-    global lightcast_token_cache
-    current_time = time.time()
-
-    # Check cache validity (with a small buffer)
-    if lightcast_token_cache["access_token"] and lightcast_token_cache["expires_at"] > current_time + 60:
-        app.logger.info("Using cached Lightcast token.")
-        return lightcast_token_cache["access_token"]
-
-    # Fetch new token if cache is invalid or missing
-    if not LIGHTCAST_CLIENT_ID or not LIGHTCAST_CLIENT_SECRET:
-        app.logger.error("Lightcast Client ID or Secret not configured.")
-        return None
-
-    payload = {
-        'client_id': LIGHTCAST_CLIENT_ID,
-        'client_secret': LIGHTCAST_CLIENT_SECRET,
-        'grant_type': 'client_credentials',
-        'scope': 'emsi_open' # Scope for Titles API (check Lightcast docs if different)
-    }
-    headers = {'Content-Type': 'application/x-www-form-urlencoded'}
-    app.logger.info("Requesting new Lightcast access token.")
-
-    try:
-        response = requests.post(LIGHTCAST_AUTH_URL, data=payload, headers=headers, timeout=10)
-        response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
-        data = response.json()
-        access_token = data.get("access_token")
-        expires_in = data.get("expires_in", 3600) # Default to 1 hour if not provided
-
-        if not access_token:
-            app.logger.error(f"Failed to get access_token from Lightcast response. Data: {data}")
-            return None
-
-        # Update cache
-        lightcast_token_cache["access_token"] = access_token
-        lightcast_token_cache["expires_at"] = current_time + expires_in
-        app.logger.info("Successfully obtained and cached new Lightcast token.")
-        return access_token
-
-    except requests.exceptions.HTTPError as e:
-        app.logger.error(f"HTTP Error requesting Lightcast token: {e.response.status_code} - Response: {e.response.text}")
-        return None
-    except requests.exceptions.RequestException as e:
-        app.logger.error(f"Network Error requesting Lightcast token: {e}")
-        return None
-    except Exception as e:
-         app.logger.error(f"Unexpected error getting Lightcast token: {e}")
-         return None
-
-
-def get_lightcast_skills(job_title):
-    """Fetches common skills for a job title using Lightcast Titles API."""
-    if not job_title:
-        return None
-
-    access_token = get_lightcast_token()
-    if not access_token:
-        app.logger.error("Cannot fetch Lightcast skills without access token.")
-        return None
-
-    headers = {'Authorization': f'Bearer {access_token}'}
-
-    # 1. Normalize the job title to get Lightcast Title ID
-    normalize_url = f"{LIGHTCAST_API_BASE_URL}/titles/normalize"
-    normalize_params = {'q': job_title, 'limit': 1} # Limit to best match
-    normalized_title_id = None
-
-    app.logger.info(f"Normalizing job title '{job_title}' with Lightcast.")
-    try:
-        response = requests.get(normalize_url, headers=headers, params=normalize_params, timeout=10)
-        response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
-        normalize_data = response.json()
-
-        if normalize_data and 'data' in normalize_data and normalize_data['data']:
-            normalized_title_id = normalize_data['data'][0].get('id')
-            app.logger.info(f"Normalized '{job_title}' to Lightcast ID: {normalized_title_id}")
-        else:
-            # Log the actual response if normalization is empty but successful (status 200)
-            app.logger.warning(f"Could not normalize job title '{job_title}' via Lightcast (empty data). Response: {normalize_data}")
-            return None # Cannot proceed without ID
-
-    except requests.exceptions.HTTPError as e:
-        # Log specific HTTP errors, including the response text for debugging
-        app.logger.error(f"HTTP Error normalizing Lightcast title: {e.response.status_code} for URL {response.url}. Response: {e.response.text}")
-        return None
-    except requests.exceptions.RequestException as e:
-        app.logger.error(f"Network Error normalizing Lightcast title: {e}")
-        return None
-    except Exception as e:
-         app.logger.error(f"Unexpected error during Lightcast title normalization: {e}")
-         return None
-
-    # 2. Fetch Title details (including skills) using the ID
-    if not normalized_title_id:
-        return None
-
-    details_url = f"{LIGHTCAST_API_BASE_URL}/titles/{normalized_title_id}"
-    details_params = {'fields': 'mapping'} # Include 'fields=mapping' to ensure skills are returned
-
-    app.logger.info(f"Fetching skills for Lightcast ID: {normalized_title_id}")
-    try:
-        response = requests.get(details_url, headers=headers, params=details_params, timeout=10)
-        response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
-        details_data = response.json()
-
-        if details_data and 'data' in details_data and 'mapping' in details_data['data'] and 'skills' in details_data['data']['mapping']:
-            skills_list = [skill.get('name') for skill in details_data['data']['mapping']['skills'] if skill.get('name')]
-            app.logger.info(f"Found {len(skills_list)} skills for '{job_title}' (ID: {normalized_title_id})")
-            return skills_list[:15] # Return top 15 skills for brevity
-        else:
-            app.logger.warning(f"No skills found in Lightcast mapping for ID: {normalized_title_id}. Response: {details_data}")
-            return None
-
-    except requests.exceptions.HTTPError as e:
-         # Log specific HTTP errors, including the response text for debugging
-        app.logger.error(f"HTTP Error fetching Lightcast title details: {e.response.status_code} for URL {response.url}. Response: {e.response.text}")
-        return None
-    except requests.exceptions.RequestException as e:
-        app.logger.error(f"Network Error fetching Lightcast title details: {e}")
-        return None
-    except Exception as e:
-         app.logger.error(f"Unexpected error fetching Lightcast skills: {e}")
-         return None
-
-# --- Other Helper Functions (Adzuna, AI, etc.) ---
-# (get_salary_histogram, get_ai_summary, extract_adzuna_job_id remain the same - omitted for brevity)
 def get_salary_histogram(country_code, location, job_title):
     """ Fetches salary histogram data from Adzuna. """
     if not ADZUNA_APP_ID or not ADZUNA_APP_KEY: return None
@@ -277,7 +136,6 @@ def get_salary_histogram(country_code, location, job_title):
         app.logger.error("Adzuna histogram request timed out.")
         return None
     except requests.exceptions.HTTPError as e:
-        # Log Adzuna 400 error response for debugging if needed
         app.logger.error(f"Adzuna histogram HTTP Error: {e.response.status_code}. Response: {e.response.text}")
         return None
     except requests.exceptions.RequestException as e:
@@ -295,13 +153,16 @@ def get_ai_summary(query_details, total_jobs, job_listings_sample, salary_data):
         return None
 
     sample_titles = [job['title'] for job in job_listings_sample[:7]]
-    sample_descriptions = " ".join([
-        job['description'] for job in job_listings_sample[:5]
+    # Ensure description is a string before joining, limit length
+    sample_descriptions_list = [
+        job['description'] for job in job_listings_sample[:5] # Use top 5 descriptions
         if isinstance(job.get('description'), str)
-    ])
-    max_desc_length = 1000
-    if len(sample_descriptions) > max_desc_length:
-        sample_descriptions = sample_descriptions[:max_desc_length] + "..."
+    ]
+    # Join descriptions, ensuring total length doesn't exceed limit drastically
+    combined_descriptions = "\n---\n".join(sample_descriptions_list) # Separate descriptions
+    max_desc_length = 1500 # Increased slightly
+    if len(combined_descriptions) > max_desc_length:
+        combined_descriptions = combined_descriptions[:max_desc_length] + "..."
 
     salary_info = "Not available"
     if salary_data and salary_data.get('average'):
@@ -309,33 +170,37 @@ def get_ai_summary(query_details, total_jobs, job_listings_sample, salary_data):
     elif salary_data and salary_data.get('histogram'):
         salary_info = "Distribution data available, but average could not be calculated."
 
-    system_message = ("You are an AI assistant providing recruitment market analysis. Focus on actionable insights for a recruiter based *only* on the provided data. Use Markdown for formatting (like **bold**).")
-    # --- MODIFIED PROMPT ---
+    system_message = (
+        "You are an AI assistant providing recruitment market analysis for a recruiter. "
+        "Focus *only* on the provided data. Use Markdown for formatting (like **bold** and bullet points)."
+        "Be concise and direct."
+    )
+    # --- REFINED PROMPT ---
     user_prompt = (
         f"Analyze the job market for a recruiter hiring for '{query_details['what']}' in '{query_details['where']}, {query_details['country'].upper()}'.\n\n"
-        f"**Market Data:**\n"
+        f"**Provided Market Data:**\n"
         f"- Total Job Listings Found: {total_jobs}\n"
         f"- Estimated Average Salary: {salary_info}\n"
         f"- Sample Job Titles: {', '.join(sample_titles) if sample_titles else 'N/A'}\n"
-        f"- Sample Job Description Excerpts: {sample_descriptions if sample_descriptions else 'N/A'}\n\n"
-        f"**Recruiter Analysis (Based *only* on above data - use Markdown for emphasis):**\n"
-        f"1.  **Market Activity & Competitiveness:** Based on job volume and salary data (if available), how active/competitive does this market seem?\n"
-        f"2.  **Specific Skills/Keywords Mentioned:** List the specific skills, technologies, tools, or qualifications explicitly mentioned in the sample job titles and descriptions provided above. Do not generalize or infer skills not present in the text.\n" # Changed instruction here
-        f"3.  **Candidate Pool & Sourcing:** What does the job volume suggest about the likely candidate pool size and the potential need for proactive sourcing vs. relying on applications?\n\n"
-        f"Provide a concise, bulleted summary. Do not invent skills or salary details not present in the data."
+        f"- Sample Job Description Excerpts:\n{combined_descriptions if combined_descriptions else 'N/A'}\n\n" # Show combined descriptions
+        f"**Recruiter Analysis (Based *strictly* on the text provided above):**\n"
+        f"1.  **Market Activity:** Briefly assess the market activity (e.g., high/medium/low volume) based on the total job listings found.\n"
+        f"2.  **Specific Skills/Technologies/Tools Mentioned:** List *only* the specific technical skills, programming languages, software tools, frameworks, methodologies (e.g., Agile, Scrum), or required qualifications (e.g., degree names, certifications) that are *explicitly written* in the 'Sample Job Description Excerpts' or 'Sample Job Titles' above. Do *not* infer skills, generalize (e.g., don't say 'cloud skills' if only 'AWS' is mentioned), or list skills not present in the provided text. Present as a bulleted list.\n"
+        f"3.  **Sourcing Considerations:** Based *only* on the total job listings number, briefly comment on whether proactive candidate sourcing might be necessary in addition to relying on applications.\n\n"
+        f"**Important:** Stick *only* to information directly present in the 'Provided Market Data' section. Do not add outside knowledge or assumptions."
     )
-    # --- END MODIFIED PROMPT ---
+    # --- END REFINED PROMPT ---
 
     payload = {
         "messages": [{"role": "system", "content": system_message}, {"role": "user", "content": user_prompt}],
-        "max_tokens": 300, # Slightly increased tokens in case skill list is longer
-        "temperature": 0.4 # Slightly lower temperature to encourage factual listing
+        "max_tokens": 350, # Increased slightly more
+        "temperature": 0.3 # Lower temperature for more factual extraction
     }
     headers = {
         'Content-Type': 'application/json',
         'api-key': AZURE_AI_KEY
     }
-    app.logger.info(f"Sending enhanced recruiter request to Azure AI Endpoint: {AZURE_AI_ENDPOINT}")
+    app.logger.info(f"Sending refined recruiter request to Azure AI Endpoint: {AZURE_AI_ENDPOINT}")
     try:
         response = requests.post(AZURE_AI_ENDPOINT, headers=headers, json=payload, timeout=30)
         response.raise_for_status()
@@ -390,7 +255,7 @@ def extract_adzuna_job_id(url):
 # --- Main Data Fetching Logic ---
 def fetch_market_insights(what, where, country):
     """
-    Fetches job listings, salary data, AI summary, and Lightcast skills.
+    Fetches job listings, salary data, and AI summary.
     Returns an 'insights_data' dictionary or None if a critical error occurs.
     """
     if not all([what, where, country]):
@@ -408,7 +273,7 @@ def fetch_market_insights(what, where, country):
     total_jobs = 0
     salary_data = None
     ai_summary_html = None
-    common_skills = None # Initialize common_skills
+    # Removed common_skills initialization
 
     query_details = {'what': what, 'where': where, 'country': country}
 
@@ -463,29 +328,21 @@ def fetch_market_insights(what, where, country):
     salary_data = get_salary_histogram(country, where, what)
     # Continue even if salary data fails
 
-    # --- 3. Call Lightcast Skills API ---
-    common_skills = get_lightcast_skills(what) # Use the 'what' field
-    if common_skills is None:
-        app.logger.warning(f"Could not retrieve common skills for '{what}' from Lightcast.")
-        # Optionally flash a message, but continue processing
-        # flash("Could not retrieve common skills data.", "info")
-    # Continue even if skills data fails
-
-    # --- 4. Call Azure AI Summary ---
-    ai_summary_raw = get_ai_summary(query_details, total_jobs, job_listings[:10], salary_data)
+    # --- 3. Call Azure AI Summary ---
+    ai_summary_raw = get_ai_summary(query_details, total_jobs, job_listings[:10], salary_data) # Use top 10 listings for summary
     if ai_summary_raw:
         html_summary = markdown.markdown(ai_summary_raw, extensions=['fenced_code', 'tables'])
         ai_summary_html = Markup(html_summary)
     # Continue even if AI summary fails
 
-    # --- 5. Assemble final insights ---
+    # --- 4. Assemble final insights ---
     insights_data = {
         "query": query_details,
         "total_matching_jobs": total_jobs,
-        "job_listings": job_listings,
+        "job_listings": job_listings, # Return all fetched listings
         "salary_data": salary_data,
-        "ai_summary_html": ai_summary_html,
-        "common_skills": common_skills # Add the fetched skills
+        "ai_summary_html": ai_summary_html
+        # Removed common_skills
     }
     return insights_data
 
@@ -494,39 +351,31 @@ def fetch_market_insights(what, where, country):
 
 @app.route('/')
 def home():
-    """
-    Renders the main search page or results based on GET parameters.
-    """
-    # Use .get(key, '') to provide default empty string if key is missing
+    """ Renders the main search page or results based on GET parameters. """
     what = request.args.get('what', '')
     where = request.args.get('where', '')
     country = request.args.get('country', '')
-    form_data = {'what': what, 'where': where, 'country': country} # For pre-filling form
+    form_data = {'what': what, 'where': where, 'country': country}
 
     insights_data = None
     saved_job_ids = set()
 
-    # If search parameters are present (and not empty strings), fetch insights
-    if what and where and country: # Check if values are truthy
+    if what and where and country:
         app.logger.info(f"Home route received search parameters: {form_data}")
         insights_data = fetch_market_insights(what, where, country)
-        # insights_data will be None if fetch_market_insights encountered an error and flashed a message
 
-    # Get saved job IDs for the current user regardless of search
     if current_user.is_authenticated:
         saved_job_ids = {job.adzuna_job_id for job in current_user.saved_jobs}
 
     return render_template('index.html',
                            insights=insights_data,
-                           form_data=form_data, # Pass form_data to pre-fill search boxes
+                           form_data=form_data,
                            saved_job_ids=saved_job_ids)
 
 
 @app.route('/insights', methods=['POST'])
 def get_insights():
-    """
-    Handles the POST from the search form (PRG Pattern).
-    """
+    """ Handles the POST from the search form (PRG Pattern). """
     what = request.form.get('what')
     where = request.form.get('where')
     country = request.form.get('country')
@@ -734,4 +583,3 @@ def saved_jobs_list():
 # --- Main execution ---
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)), debug=False)
-
