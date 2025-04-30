@@ -31,6 +31,11 @@
             color: #ef4444; /* Default text color (red-500) */
             background-color: transparent; /* Default background */
             border: 1px solid #fecaca; /* Default border (red-200) */
+            padding: 0.3rem 0.6rem;
+            font-size: 0.75rem;
+            border-radius: 0.375rem;
+            font-weight: 500;
+            transition: all 0.15s ease-in-out;
         }
         .unsave-btn:hover {
             color: #dc2626; /* Darker red text on hover (red-600) */
@@ -60,6 +65,11 @@
             background-color: #ecfdf5; /* Light green background (emerald-50) */
             color: #065f46; /* Dark green text (emerald-800) */
             border: 1px solid #a7f3d0; /* Light green border (emerald-200) */
+            padding: 0.3rem 0.6rem;
+            font-size: 0.75rem;
+            border-radius: 0.375rem;
+            font-weight: 500;
+            transition: all 0.15s ease-in-out;
         }
         .save-btn:hover {
             background-color: #d1fae5; /* Slightly darker green background on hover (emerald-100) */
@@ -103,15 +113,15 @@
         <nav class="bg-white shadow-sm border-b border-slate-200 sticky top-0 z-10">
              <div class="container mx-auto px-4 max-w-5xl">
                  <div class="flex justify-between items-center py-3">
-                     <a href="{{ url_for('home') }}" class="text-xl font-bold text-indigo-600 hover:text-indigo-700 transition-all-ease">Job Insights</a>
+                     <a href="{{ url_for('main_bp.home') }}" class="text-xl font-bold text-indigo-600 hover:text-indigo-700 transition-all-ease">Job Insights</a> {# FIXED #}
                      <div class="flex items-center space-x-4">
                          {% if current_user.is_authenticated %}
                              <span class="text-sm text-slate-600 hidden sm:inline">Welcome, {{ current_user.email }}</span> {# Hide on small screens #}
-                             <a href="{{ url_for('saved_jobs_list') }}" class="text-sm font-medium text-slate-600 hover:text-indigo-600 transition-all-ease">Saved Jobs</a>
-                             <a href="{{ url_for('logout') }}" class="text-sm font-medium text-slate-600 hover:text-indigo-600 transition-all-ease">Logout</a>
+                             <a href="{{ url_for('main_bp.saved_jobs_list') }}" class="text-sm font-medium text-slate-600 hover:text-indigo-600 transition-all-ease">Saved Jobs</a> {# FIXED #}
+                             <a href="{{ url_for('main_bp.logout') }}" class="text-sm font-medium text-slate-600 hover:text-indigo-600 transition-all-ease">Logout</a> {# FIXED #}
                          {% else %}
-                             <a href="{{ url_for('login') }}" class="text-sm font-medium text-slate-600 hover:text-indigo-600 transition-all-ease">Login</a>
-                             <a href="{{ url_for('register') }}" class="text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 rounded-md transition-all-ease">Register</a>
+                             <a href="{{ url_for('main_bp.login') }}" class="text-sm font-medium text-slate-600 hover:text-indigo-600 transition-all-ease">Login</a> {# FIXED #}
+                             <a href="{{ url_for('main_bp.register') }}" class="text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 rounded-md transition-all-ease">Register</a> {# FIXED #}
                          {% endif %}
                      </div>
                  </div>
@@ -135,4 +145,3 @@
     {% endblock scripts %}
 </body>
 </html>
-

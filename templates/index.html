@@ -28,7 +28,7 @@
     {% endwith %}
 
     <div class="bg-white p-6 md:p-8 rounded-xl shadow-lg mb-12 md:mb-16 border border-slate-200/80">
-        <form action="{{ url_for('get_insights') }}" method="POST" class="space-y-6">
+        <form action="{{ url_for('main_bp.get_insights') }}" method="POST" class="space-y-6"> {# FIXED #}
              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
@@ -86,22 +86,6 @@
         </div>
         {% endif %}
 
-        {% if insights.common_skills %}
-        <div class="bg-purple-50 border border-purple-200 border-l-4 border-l-purple-500 text-purple-900 p-6 rounded-lg shadow-sm">
-             <h3 class="text-lg font-semibold mb-2.5 flex items-center text-purple-800">
-                 <i class="fas fa-cogs mr-2.5 text-purple-600 fa-lg"></i> Commonly Associated Skills (via Lightcast)
-             </h3>
-             <div class="flex flex-wrap gap-2">
-                 {% for skill in insights.common_skills %}
-                 <span class="inline-block bg-purple-100 text-purple-800 text-xs font-medium px-2.5 py-0.5 rounded-full border border-purple-200">
-                     {{ skill }}
-                 </span>
-                 {% endfor %}
-             </div>
-             <p class="text-xs text-purple-600 mt-3">Note: Based on standardized job title analysis.</p>
-        </div>
-        {% endif %}
-
         {% if insights.ai_summary_html %}
         <div class="ai-summary-box p-6 rounded-lg">
             <h3 class="text-lg font-semibold mb-2.5 flex items-center text-sky-900">
@@ -142,8 +126,8 @@
                                             <button type="button" class="action-btn saved-btn save-toggle-btn"
                                                     data-action="unsave"
                                                     data-job-id="{{ job.adzuna_job_id }}"
-                                                    data-save-url="{{ url_for('save_job') }}"
-                                                    data-unsave-url="{{ url_for('unsave_job') }}"
+                                                    data-save-url="{{ url_for('main_bp.save_job') }}" {# FIXED #}
+                                                    data-unsave-url="{{ url_for('main_bp.unsave_job') }}" {# FIXED #}
                                                     title="Remove from saved jobs">
                                                 <i class="fas fa-bookmark"></i> Saved
                                             </button>
@@ -155,8 +139,8 @@
                                                     data-company="{{ job.company }}"
                                                     data-location="{{ job.location }}"
                                                     data-adzuna-url="{{ job.url }}"
-                                                    data-save-url="{{ url_for('save_job') }}"
-                                                    data-unsave-url="{{ url_for('unsave_job') }}"
+                                                    data-save-url="{{ url_for('main_bp.save_job') }}" {# FIXED #}
+                                                    data-unsave-url="{{ url_for('main_bp.unsave_job') }}" {# FIXED #}
                                                     title="Save this job">
                                                 <i class="far fa-bookmark"></i> Save
                                             </button>
@@ -300,5 +284,3 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 </script>
 {% endblock %}
-
-

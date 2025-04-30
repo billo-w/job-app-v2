@@ -4,7 +4,7 @@
 
 {% block navigation %}
     <header class="py-4 text-center border-b border-slate-200 bg-white shadow-sm">
-         <a href="{{ url_for('home') }}" class="text-2xl font-bold text-indigo-600 hover:text-indigo-700 transition-colors duration-200">Job Insights</a>
+         <a href="{{ url_for('main_bp.home') }}" class="text-2xl font-bold text-indigo-600 hover:text-indigo-700 transition-colors duration-200">Job Insights</a> {# FIXED #}
     </header>
 {% endblock %}
 
@@ -23,7 +23,7 @@
     {% endwith %}
 
     <div class="bg-white p-8 rounded-xl shadow-lg border border-slate-200/80">
-        <form method="POST" action="{{ url_for('login') }}{{ '?next=' + request.args.get('next', '') if request.args.get('next') else '' }}" novalidate>
+        <form method="POST" action="{{ url_for('main_bp.login') }}{{ '?next=' + request.args.get('next', '') if request.args.get('next') else '' }}" novalidate> {# FIXED #}
             {{ form.hidden_tag() }} {# Required for CSRF protection #}
 
             <div class="mb-5">
@@ -66,8 +66,7 @@
     </div>
 
     <p class="text-center text-sm text-slate-600 mt-6">
-        Need an account? <a href="{{ url_for('register') }}" class="font-medium text-indigo-600 hover:text-indigo-500">Register here</a>
+        Need an account? <a href="{{ url_for('main_bp.register') }}" class="font-medium text-indigo-600 hover:text-indigo-500">Register here</a> {# FIXED #}
     </p>
 </div>
 {% endblock %}
-

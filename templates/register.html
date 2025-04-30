@@ -4,7 +4,7 @@
 
 {% block navigation %}
     <header class="py-4 text-center border-b border-slate-200 bg-white shadow-sm">
-         <a href="{{ url_for('home') }}" class="text-2xl font-bold text-indigo-600 hover:text-indigo-700 transition-colors duration-200">Job Insights</a>
+         <a href="{{ url_for('main_bp.home') }}" class="text-2xl font-bold text-indigo-600 hover:text-indigo-700 transition-colors duration-200">Job Insights</a> {# FIXED #}
     </header>
 {% endblock %}
 
@@ -23,7 +23,7 @@
     {% endwith %}
 
     <div class="bg-white p-8 rounded-xl shadow-lg border border-slate-200/80">
-        <form method="POST" action="{{ url_for('register') }}" novalidate>
+        <form method="POST" action="{{ url_for('main_bp.register') }}" novalidate> {# FIXED #}
             {{ form.hidden_tag() }} {# Required for CSRF protection #}
 
             <div class="mb-5">
@@ -63,8 +63,7 @@
     </div>
 
     <p class="text-center text-sm text-slate-600 mt-6">
-        Already have an account? <a href="{{ url_for('login') }}" class="font-medium text-indigo-600 hover:text-indigo-500">Login here</a>
+        Already have an account? <a href="{{ url_for('main_bp.login') }}" class="font-medium text-indigo-600 hover:text-indigo-500">Login here</a> {# FIXED #}
     </p>
 </div>
 {% endblock %}
-
