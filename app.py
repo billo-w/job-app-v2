@@ -147,16 +147,16 @@ def create_app(config_object=None):
     login_manager.login_message_category = 'info'
 
     # --- Register Blueprints ---
-    # Use absolute import assuming routes.py is in the same directory as app.py
+    # Try importing the specific blueprint object directly
     try:
-        import routes # Changed from relative import
-        app.register_blueprint(routes.main_bp) # Register the blueprint instance
+        from routes import main_bp # Import the blueprint instance directly
+        app.register_blueprint(main_bp) # Register it
         app.logger.info("Successfully registered blueprint from routes.py")
     except ImportError as e:
         # Handle case where routes.py might not exist yet or has issues
-        app.logger.error(f"Could not import or register blueprint from routes.py: {e}")
-    except AttributeError as e:
-        app.logger.error(f"Could not find 'main_bp' in routes.py: {e}")
+        app.logger.error(f"Could not import 'main_bp' from routes.py: {e}")
+    except Exception as e:
+        app.logger.error(f"An unexpected error occurred during blueprint registration: {e}")
 
 
     # --- Flask-Login User Loader (defined inside factory or imported) ---
@@ -428,3 +428,4 @@ if __name__ == '__main__':
     # debug=True is okay for local dev, but should be False in production (set via env var ideally)
     dev_app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)),
             debug=os.getenv('FLASK_DEBUG', 'False').lower() in ('true', '1', 't'))
+

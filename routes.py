@@ -1,17 +1,13 @@
-from flask import (Blueprint, render_template, request, flash, redirect, url_for,
-                   jsonify, current_app) # Import current_app for logger
+# routes.py
+from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, current_app
 from flask_login import login_required, current_user, login_user, logout_user
 import logging
+from urllib.parse import urlparse # Make sure this is imported if used
 
-# Import necessary components from your main module (or models/forms files if separated)
-# Assuming app.py structure where these are defined or imported
-from . import db, User, SavedJob, RegistrationForm, LoginForm
-from . import fetch_market_insights # Import the main data fetching helper
+# Import from the main app module (assuming app.py and routes.py are siblings)
+from app import db, User, SavedJob, RegistrationForm, LoginForm, fetch_market_insights
 
-# Create a Blueprint
 main_bp = Blueprint('main_bp', __name__)
-
-# Get logger instance
 logger = logging.getLogger(__name__)
 
 # --- Main Routes ---
