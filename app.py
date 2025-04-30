@@ -13,21 +13,26 @@ from wtforms import StringField, PasswordField, SubmitField, BooleanField
 from wtforms.validators import DataRequired, Email, EqualTo, Length, ValidationError
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
-import logging
+import logging # Ensure logging is imported
 import markdown
 from markupsafe import Markup
 from urllib.parse import urlparse, parse_qs
 
 # --- Basic Setup ---
-logging.basicConfig(level=logging.INFO)
+# Configure logging BEFORE creating the app instance in the factory
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s:%(name)s:%(message)s')
+logger = logging.getLogger(__name__) # Get root logger instance
+logger.info("--- app.py loaded ---")
 load_dotenv() # Load environment variables early
 
 # --- Extensions Initialization (outside factory) ---
 # Create extension instances without attaching them to an app yet
+logger.info("--- Initializing extensions (globally) ---")
 db = SQLAlchemy()
 migrate = Migrate()
 login_manager = LoginManager()
 csrf = CSRFProtect()
+logger.info("--- Extensions initialized ---")
 
 # --- API Configuration (Constants) ---
 # These can stay at the top level as they don't depend on the app context yet
@@ -41,7 +46,7 @@ AZURE_AI_KEY = os.getenv('AZURE_AI_KEY')
 # --- Database Models ---
 # Models need db, but defining them here is okay as they are just classes
 # They get fully connected to the db instance later via init_app
-
+logger.info("--- Defining models ---")
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
@@ -69,10 +74,11 @@ class SavedJob(db.Model):
 
     def __repr__(self):
         return f'<SavedJob {self.title} ({self.adzuna_job_id})>'
+logger.info("--- Models defined ---")
 
 # --- Forms (using Flask-WTF) ---
 # Forms can also be defined at the top level
-
+logger.info("--- Defining forms ---")
 class RegistrationForm(FlaskForm):
     email = StringField('Email', validators=[DataRequired(), Email()])
     password = PasswordField('Password', validators=[DataRequired(), Length(min=8)])
@@ -80,30 +86,35 @@ class RegistrationForm(FlaskForm):
     submit = SubmitField('Register')
 
     def validate_email(self, email):
-        # Need app context to query db, validation needs adjustment or move
-        # For simplicity, we might skip this custom validation in tests
-        # Or pass the app context if needed during form instantiation
-        # Let's assume for now it works within a request context
-        # This check might fail during testing if app context isn't set up correctly before form validation
-        # Consider moving DB checks into the route handler instead of the form validator for easier testing
-        user = User.query.filter_by(email=email.data).first()
-        if user:
-            raise ValidationError('That email is already taken. Please choose a different one or login.')
+        # This validation requires app context and might cause issues if run outside it.
+        # It's safer to perform DB checks within the route handler.
+        # For now, we'll keep it but be aware it might fail in some contexts.
+        try:
+            user = User.query.filter_by(email=email.data).first()
+            if user:
+                raise ValidationError('That email is already taken. Please choose a different one or login.')
+        except Exception as e:
+            # Log if DB query fails outside context, but don't crash the import
+            logger.warning(f"Could not perform User query during form definition: {e}")
+
 
 class LoginForm(FlaskForm):
     email = StringField('Email', validators=[DataRequired(), Email()])
     password = PasswordField('Password', validators=[DataRequired()])
     remember = BooleanField('Remember Me')
     submit = SubmitField('Login')
-
+logger.info("--- Forms defined ---")
 
 # --- Application Factory Function ---
 def create_app(config_object=None):
     """Creates and configures the Flask application."""
+    logger.info("--- ENTERING create_app() ---") # ADDED LOGGING
     # Use instance_relative_config=False if config files are not relative to instance folder
     app = Flask(__name__, instance_relative_config=False, template_folder='templates')
+    logger.info("--- Flask app instance created ---")
 
     # --- Load Configuration ---
+    logger.info("--- Loading configuration ---")
     # Default configuration
     app.config.update(
         SECRET_KEY=os.getenv('FLASK_SECRET_KEY', 'default-dev-secret-key'),
@@ -112,15 +123,20 @@ def create_app(config_object=None):
         SQLALCHEMY_ECHO=os.getenv('SQLALCHEMY_ECHO', 'False').lower() in ('true', '1', 't'),
         WTF_CSRF_ENABLED=True # Enable CSRF by default
     )
+    logger.info(f"Default DATABASE_URL from env: {app.config.get('SQLALCHEMY_DATABASE_URI')}")
 
     # Override with testing config if provided (e.g., from pytest fixture)
     if config_object:
         app.config.from_object(config_object)
+        logger.info(f"Applied config object: {config_object}")
 
     # Allow environment variables set *at runtime* (like in CI test step) to override
     # This ensures TEST_DATABASE_URL from the CI env takes precedence
-    if os.getenv('SQLALCHEMY_DATABASE_URI'):
-         app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI')
+    runtime_db_uri = os.getenv('SQLALCHEMY_DATABASE_URI')
+    if runtime_db_uri:
+         app.config['SQLALCHEMY_DATABASE_URI'] = runtime_db_uri
+         logger.info(f"Overriding DB URI with runtime env var: {runtime_db_uri}")
+
     if os.getenv('WTF_CSRF_ENABLED') is not None:
         app.config['WTF_CSRF_ENABLED'] = os.getenv('WTF_CSRF_ENABLED').lower() in ('true', '1', 't')
     if os.getenv('TESTING') is not None:
@@ -128,45 +144,64 @@ def create_app(config_object=None):
     if os.getenv('LOGIN_DISABLED') is not None:
         app.config['LOGIN_DISABLED'] = os.getenv('LOGIN_DISABLED').lower() in ('true', '1', 't')
 
+    logger.info(f"Final SQLALCHEMY_DATABASE_URI: {app.config.get('SQLALCHEMY_DATABASE_URI')}")
+    logger.info(f"Final TESTING config: {app.config.get('TESTING')}")
 
     # Check if DATABASE_URL is set *after* loading all config sources
     if not app.config.get('SQLALCHEMY_DATABASE_URI'):
-         # Raise error if DB URI is still missing when the factory is called
-         # This should now happen inside the test fixture where TEST_DATABASE_URL is set
+         logger.error("--- DATABASE_URL is NOT SET in config! ---")
          raise RuntimeError("'SQLALCHEMY_DATABASE_URI' must be set via config object or environment variable.")
 
 
     # --- Initialize Extensions with the app ---
-    db.init_app(app)
-    migrate.init_app(app, db)
-    login_manager.init_app(app)
-    csrf.init_app(app)
+    logger.info("--- Initializing extensions with app ---")
+    try:
+        db.init_app(app)
+        logger.info("db initialized.")
+        migrate.init_app(app, db)
+        logger.info("migrate initialized.")
+        login_manager.init_app(app)
+        logger.info("login_manager initialized.")
+        csrf.init_app(app)
+        logger.info("csrf initialized.")
+    except Exception as e:
+        logger.error(f"--- ERROR initializing extensions: {e} ---", exc_info=True)
+        raise # Re-raise the exception to see the full traceback
 
     # Configure Flask-Login settings
     login_manager.login_view = 'main_bp.login' # Use blueprint name
     login_manager.login_message_category = 'info'
+    logger.info("--- Flask-Login configured ---")
 
     # --- Register Blueprints ---
+    logger.info("--- Registering blueprints ---")
     # Try importing the specific blueprint object directly
     try:
-        from routes import main_bp # Import the blueprint instance directly
-        app.register_blueprint(main_bp) # Register it
-        app.logger.info("Successfully registered blueprint from routes.py")
+        # Assuming routes.py is in the same directory as app.py
+        import routes
+        app.register_blueprint(routes.main_bp) # Register the blueprint instance
+        logger.info("Successfully registered blueprint 'main_bp' from routes.py")
     except ImportError as e:
         # Handle case where routes.py might not exist yet or has issues
-        app.logger.error(f"Could not import 'main_bp' from routes.py: {e}")
+        logger.error(f"Could not import routes.py: {e}", exc_info=True)
+        # Depending on your setup, you might want to raise the error or continue
+        # raise e
+    except AttributeError as e:
+        logger.error(f"Could not find 'main_bp' in routes.py: {e}", exc_info=True)
+        # raise e
     except Exception as e:
-        app.logger.error(f"An unexpected error occurred during blueprint registration: {e}")
-
+        logger.error(f"An unexpected error occurred during blueprint registration: {e}", exc_info=True)
+        # raise e
 
     # --- Flask-Login User Loader (defined inside factory or imported) ---
     @login_manager.user_loader
     def load_user(user_id):
         """Callback used by Flask-Login to reload the user object."""
         # This requires app context, which is fine here as it runs during requests
+        logger.debug(f"Loading user {user_id}")
         return User.query.get(int(user_id))
 
-    app.logger.info(f"Flask app created. Config TESTING={app.config.get('TESTING')}, DB={app.config.get('SQLALCHEMY_DATABASE_URI')}")
+    logger.info(f"--- EXITING create_app(), returning app: {app.name} ---") # ADDED LOGGING
     return app
 
 # --- Helper Functions (moved inside or kept separate if no app context needed) ---
