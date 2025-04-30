@@ -84,6 +84,8 @@ class RegistrationForm(FlaskForm):
         # For simplicity, we might skip this custom validation in tests
         # Or pass the app context if needed during form instantiation
         # Let's assume for now it works within a request context
+        # This check might fail during testing if app context isn't set up correctly before form validation
+        # Consider moving DB checks into the route handler instead of the form validator for easier testing
         user = User.query.filter_by(email=email.data).first()
         if user:
             raise ValidationError('That email is already taken. Please choose a different one or login.')
@@ -110,10 +112,12 @@ def create_app(config_object=None):
         WTF_CSRF_ENABLED=True # Enable CSRF by default
     )
 
-    # Override with testing config if provided
+    # Override with testing config if provided (e.g., from pytest fixture)
     if config_object:
         app.config.from_object(config_object)
-    # Allow environment variables to override defaults (e.g., for testing)
+
+    # Allow environment variables set *at runtime* (like in CI test step) to override
+    # This ensures TEST_DATABASE_URL from the CI env takes precedence
     if os.getenv('SQLALCHEMY_DATABASE_URI'):
          app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI')
     if os.getenv('WTF_CSRF_ENABLED') is not None:
@@ -124,12 +128,12 @@ def create_app(config_object=None):
         app.config['LOGIN_DISABLED'] = os.getenv('LOGIN_DISABLED').lower() in ('true', '1', 't')
 
 
-    # Check if DATABASE_URL is set after loading config
+    # Check if DATABASE_URL is set *after* loading all config sources
     if not app.config.get('SQLALCHEMY_DATABASE_URI'):
-         # Only raise error if running normally, not during import for tests maybe?
-         # Let SQLAlchemy handle the check during init_app for clarity
-         # raise RuntimeError("DATABASE_URL environment variable must be set.")
-         pass # SQLAlchemy will raise error if needed later
+         # Raise error if DB URI is still missing when the factory is called
+         # This should now happen inside the test fixture where TEST_DATABASE_URL is set
+         raise RuntimeError("'SQLALCHEMY_DATABASE_URI' must be set via config object or environment variable.")
+
 
     # --- Initialize Extensions with the app ---
     db.init_app(app)
@@ -143,16 +147,23 @@ def create_app(config_object=None):
 
     # --- Register Blueprints ---
     # Using a blueprint helps organize routes
-    from .routes import main_bp # Assuming routes are moved to routes.py
-    app.register_blueprint(main_bp)
+    # Ensure routes.py exists and defines main_bp
+    try:
+        from . import routes
+        app.register_blueprint(routes.main_bp)
+    except ImportError:
+        # Handle case where routes.py might not exist yet or has issues
+        app.logger.error("Could not import or register blueprint from routes.py")
+
 
     # --- Flask-Login User Loader (defined inside factory or imported) ---
     @login_manager.user_loader
     def load_user(user_id):
         """Callback used by Flask-Login to reload the user object."""
+        # This requires app context, which is fine here as it runs during requests
         return User.query.get(int(user_id))
 
-    app.logger.info("Flask app created and configured.")
+    app.logger.info(f"Flask app created. Config TESTING={app.config.get('TESTING')}, DB={app.config.get('SQLALCHEMY_DATABASE_URI')}")
     return app
 
 # --- Helper Functions (moved inside or kept separate if no app context needed) ---
@@ -386,7 +397,7 @@ def fetch_market_insights(what, where, country):
     salary_data = get_salary_histogram(country, where, what)
 
     # --- 3. Call Azure AI Summary ---
-    ai_summary_raw = get_ai_summary(query_details, total_jobs, job_listings[:10], salary_data)
+    ai_summary_raw = get_ai_summary(query_details, total_jobs, job_listings[:10], salary_data) # Use top 10 listings for summary
     if ai_summary_raw:
         html_summary = markdown.markdown(ai_summary_raw, extensions=['fenced_code', 'tables'])
         ai_summary_html = Markup(html_summary)
@@ -395,7 +406,7 @@ def fetch_market_insights(what, where, country):
     insights_data = {
         "query": query_details,
         "total_matching_jobs": total_jobs,
-        "job_listings": job_listings,
+        "job_listings": job_listings, # Return all fetched listings
         "salary_data": salary_data,
         "ai_summary_html": ai_summary_html
     }
@@ -403,14 +414,15 @@ def fetch_market_insights(what, where, country):
 
 
 # --- Main execution / Create app instance ---
-# Create the app instance using the factory
-# This is what Gunicorn or Flask CLI will look for
-app = create_app()
+# REMOVED: app = create_app() - Instance should be created by WSGI server or test runner
 
 # --- Run development server (if script is executed directly) ---
+# This block is typically NOT used in production with Gunicorn
+# It's useful for local development using `python app.py`
 if __name__ == '__main__':
+    # Create an app instance ONLY when running directly
+    dev_app = create_app()
     # Use the app instance created by the factory
     # debug=True is okay for local dev, but should be False in production (set via env var ideally)
-    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)),
+    dev_app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)),
             debug=os.getenv('FLASK_DEBUG', 'False').lower() in ('true', '1', 't'))
-
