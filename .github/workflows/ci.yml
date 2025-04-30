@@ -8,6 +8,11 @@ on:
     branches:
       - main # Trigger on pull requests targeting main
 
+# --- ADD THIS PERMISSIONS BLOCK ---
+permissions:
+  contents: write # Allow workflow to push to the repository (needed for production branch update)
+# --- END PERMISSIONS BLOCK ---
+
 jobs:
   build_and_test:
     runs-on: ubuntu-latest # Use a standard Linux runner
@@ -44,9 +49,8 @@ jobs:
 
     - name: Run tests
       env:
-        # --- ADD THIS LINE ---
-        PYTHONPATH: .
-        # --- Environment variables for your tests ---
+        PYTHONPATH: . # Ensure app module can be found
+        # Environment variables for your tests
         TEST_DATABASE_URL: postgresql://testuser:testpassword@localhost:5432/jobapp_testdb # Connect to the service container DB
         FLASK_APP: app:app
         FLASK_ENV: testing
@@ -87,5 +91,5 @@ jobs:
         echo "Pushing production branch to origin..."
         git push origin production
       env:
-        # GITHUB_TOKEN is automatically provided by Actions
+        # GITHUB_TOKEN is automatically provided by Actions and will use the 'contents: write' permission
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
