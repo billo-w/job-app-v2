@@ -8,6 +8,70 @@ terraform {
   }
 }
 
+# --- Variables ---
+# Defined in variables.tf
+
+variable "do_token" {
+  description = "DigitalOcean API Token"
+  type        = string
+  sensitive   = true
+}
+
+variable "repo_path" {
+  description = "GitHub repository path (e.g., your_username/your_repo_name)"
+  type        = string
+}
+
+variable "app_name" {
+  description = "Name for the App Platform app"
+  type        = string
+  default     = "job-app"
+}
+
+variable "app_region" {
+  description = "Region for the app"
+  type        = string
+  default     = "lon1" # e.g., London
+}
+
+variable "production_branch" {
+  description = "The GitHub branch to deploy to production"
+  type        = string
+  default     = "production"
+}
+
+variable "database_url_prod" {
+  description = "Connection string (DATABASE_URL) for the production database (must be created separately)"
+  type        = string
+  sensitive   = true
+}
+
+variable "flask_secret_key_prod" {
+  description = "Flask secret key for production"
+  type        = string
+  sensitive   = true
+}
+variable "adzuna_app_id" {
+  description = "Adzuna App ID"
+  type        = string
+  sensitive   = true
+}
+variable "adzuna_app_key" {
+  description = "Adzuna App Key"
+  type        = string
+  sensitive   = true
+}
+variable "azure_ai_endpoint" {
+  description = "Azure AI Endpoint URL"
+  type        = string
+  sensitive   = true
+}
+variable "azure_ai_key" {
+  description = "Azure AI Key"
+  type        = string
+  sensitive   = true
+}
+
 # --- Provider Configuration ---
 provider "digitalocean" {
   token = var.do_token
@@ -19,23 +83,26 @@ resource "digitalocean_app" "jobapp" {
     name   = var.app_name
     region = var.app_region
 
-    # Link to your GitHub repository
-    github {
-      repo             = var.repo_path
-      branch           = var.production_branch
-      deploy_on_push = true # Automatically deploy on push to the branch
-    }
-
     # Define the Web Service (your Flask app)
     service {
       name = "${var.app_name}-service" # Name for the service component
+
+      # --- CORRECTED: github block INSIDE service ---
+      github {
+        repo             = var.repo_path
+        branch           = var.production_branch
+        deploy_on_push = true # Automatically deploy on push to the branch
+      }
+
       instance_size_slug = "basic-xxs" # Choose instance size
       instance_count     = 1          # Number of instances
 
-      # Define Environment Variables
+      # Define Environment Variables (Correctly placed inside service)
       environment_vars = [
         {
           key   = "FLASK_APP"
+          # If using factory via wsgi.py: value = "wsgi:application"
+          # If using factory directly: value = "app:create_app()"
           value = "app:create_app()" # Match run command
         },
         {
@@ -75,19 +142,19 @@ resource "digitalocean_app" "jobapp" {
         # Add any other necessary environment variables
       ]
 
-      # Define the run command (Gunicorn is recommended for production)
+      # Define the run command (Correctly placed inside service)
       run_command = "gunicorn 'app:create_app()' --bind 0.0.0.0:$PORT --workers 2 --log-level info"
 
       # Define the build command (if needed, often auto-detected for Python)
       # build_command = "pip install -r requirements.txt" # Example if needed
 
-      # Define health checks (optional but recommended)
+      # Define health checks (Correctly placed inside service)
       health_check {
         http_path = "/" # Path for HTTP health check (e.g., your home route)
       }
     }
-    # Removed database block
-    # Removed job block (migration job) - Migrations need to be run manually or via a different process
+    # Database block removed
+    # Migration job block removed
   }
 }
 
