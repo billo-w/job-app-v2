@@ -9,79 +9,18 @@ terraform {
 }
 
 # --- Variables ---
-# Defined in variables.tf
-
-variable "do_token" {
-  description = "DigitalOcean API Token"
-  type        = string
-  sensitive   = true
-}
-
-variable "repo_path" {
-  description = "GitHub repository path (e.g., your_username/your_repo_name)"
-  type        = string
-}
-
-variable "app_name" {
-  description = "Name for the App Platform app"
-  type        = string
-  default     = "job-app"
-}
-
-variable "app_region" {
-  description = "Region for the app"
-  type        = string
-  default     = "lon1" # e.g., London
-}
-
-variable "production_branch" {
-  description = "The GitHub branch to deploy to production"
-  type        = string
-  default     = "production"
-}
-
-variable "database_url_prod" {
-  description = "Connection string (DATABASE_URL) for the production database (must be created separately)"
-  type        = string
-  sensitive   = true
-}
-
-variable "flask_secret_key_prod" {
-  description = "Flask secret key for production"
-  type        = string
-  sensitive   = true
-}
-variable "adzuna_app_id" {
-  description = "Adzuna App ID"
-  type        = string
-  sensitive   = true
-}
-variable "adzuna_app_key" {
-  description = "Adzuna App Key"
-  type        = string
-  sensitive   = true
-}
-variable "azure_ai_endpoint" {
-  description = "Azure AI Endpoint URL"
-  type        = string
-  sensitive   = true
-}
-variable "azure_ai_key" {
-  description = "Azure AI Key"
-  type        = string
-  sensitive   = true
-}
+# Variable definitions are now ONLY in variables.tf
 
 # --- Provider Configuration ---
 provider "digitalocean" {
-  token = var.do_token
+  token = var.do_token # Value comes from variables.tf
 }
 
 # --- DigitalOcean App Platform App Resource ---
 resource "digitalocean_app" "jobapp" {
   spec {
-    name   = var.app_name
-    region = var.app_region
+    name   = var.app_name   # Value comes from variables.tf
+    region = var.app_region # Value comes from variables.tf
 
     # Define the Web Service (your Flask app)
     service {
@@ -89,9 +28,9 @@ resource "digitalocean_app" "jobapp" {
 
       # --- CORRECTED: github block INSIDE service ---
       github {
-        repo             = var.repo_path
-        branch           = var.production_branch
-        deploy_on_push = true # Automatically deploy on push to the branch
+        repo             = var.repo_path           # Value comes from variables.tf
+        branch           = var.production_branch # Value comes from variables.tf
+        deploy_on_push = true                    # Automatically deploy on push to the branch
       }
 
       instance_size_slug = "basic-xxs" # Choose instance size
@@ -101,8 +40,6 @@ resource "digitalocean_app" "jobapp" {
       environment_vars = [
         {
           key   = "FLASK_APP"
-          # If using factory via wsgi.py: value = "wsgi:application"
-          # If using factory directly: value = "app:create_app()"
           value = "app:create_app()" # Match run command
         },
         {
@@ -111,32 +48,32 @@ resource "digitalocean_app" "jobapp" {
         },
         {
           key   = "DATABASE_URL"
-          value = var.database_url_prod # Get connection string from variable
+          value = var.database_url_prod # Value comes from variables.tf
           type  = "SECRET"              # Mark as secret
         },
         {
           key   = "FLASK_SECRET_KEY"
-          value = var.flask_secret_key_prod
+          value = var.flask_secret_key_prod # Value comes from variables.tf
           type  = "SECRET"
         },
         {
           key   = "ADZUNA_APP_ID"
-          value = var.adzuna_app_id
+          value = var.adzuna_app_id # Value comes from variables.tf
           type  = "SECRET"
         },
         {
           key   = "ADZUNA_APP_KEY"
-          value = var.adzuna_app_key
+          value = var.adzuna_app_key # Value comes from variables.tf
           type  = "SECRET"
         },
         {
           key   = "AZURE_AI_ENDPOINT"
-          value = var.azure_ai_endpoint
+          value = var.azure_ai_endpoint # Value comes from variables.tf
           type  = "SECRET"
         },
         {
           key   = "AZURE_AI_KEY"
-          value = var.azure_ai_key
+          value = var.azure_ai_key # Value comes from variables.tf
           type  = "SECRET"
         },
         # Add any other necessary environment variables
@@ -163,3 +100,4 @@ resource "digitalocean_app" "jobapp" {
 output "app_url" {
   value = digitalocean_app.jobapp.default_ingress
 }
+
