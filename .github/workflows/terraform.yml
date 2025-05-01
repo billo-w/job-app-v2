@@ -1,3 +1,6 @@
+# .github/workflows/terraform.yml
+# Ensure this file uses spaces for indentation (2 spaces per level).
+# Replace the entire file content with this block.
 name: Terraform Infrastructure CI/CD
 
 on:
@@ -19,6 +22,10 @@ on:
   #   paths:
   #     - '**.tf'
   #     - '**.tfvars'
+
+# Grant permissions for the GITHUB_TOKEN to push to the repo
+permissions:
+  contents: write
 
 jobs:
   terraform:
