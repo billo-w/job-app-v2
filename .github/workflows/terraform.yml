@@ -24,26 +24,33 @@ on:
   #     - '**.tfvars'
 
 # Grant permissions for the GITHUB_TOKEN to push to the repo
+# This block should be at the root level (no indentation)
 permissions:
   contents: write
 
+# jobs block should be at the root level (no indentation)
 jobs:
+  # terraform job definition should be indented 2 spaces
   terraform:
+    # Keys under the job should be indented 4 spaces
     name: 'Terraform ${{ github.event.inputs.terraform_action || 'Plan' }}' # Dynamic job name
     runs-on: ubuntu-latest
     env:
-      # Set non-sensitive Terraform variables here if needed
+      # Keys under env should be indented 6 spaces
       TF_VAR_app_name: "job-app" # Example from your tf file default
       TF_VAR_app_region: "lon1"
       TF_VAR_production_branch: "production"
       # Sensitive variables are loaded from secrets below
 
+    # steps block should be indented 4 spaces
     steps:
+    # Each step (name, uses, etc.) should be indented 6 spaces
     - name: Checkout code
       uses: actions/checkout@v4
 
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
+      # with block (if used) indented 8 spaces
       # with:
       #   terraform_version: "1.0.0" # Optional: specify version
 
@@ -55,7 +62,7 @@ jobs:
     - name: Terraform Init
       id: init
       env:
-        # Pass DO token for provider initialization if needed by backend config (usually not for standard)
+        # env under step indented 8 spaces, key indented 10 spaces
         DIGITALOCEAN_TOKEN: ${{ secrets.DO_TOKEN }}
       run: terraform init
 
@@ -66,7 +73,7 @@ jobs:
     - name: Terraform Plan
       id: plan
       env:
-        # Pass ALL TF_VAR secrets needed for the plan
+        # env under step indented 8 spaces, keys indented 10 spaces
         DIGITALOCEAN_TOKEN: ${{ secrets.DO_TOKEN }} # Needed by the provider during plan/apply
         TF_VAR_do_token: ${{ secrets.DO_TOKEN }} # Pass as TF_VAR as well
         TF_VAR_repo_path: ${{ secrets.TF_VAR_repo_path }}
