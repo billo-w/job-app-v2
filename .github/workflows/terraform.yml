@@ -81,13 +81,13 @@ jobs:
         # Pass ALL TF_VAR secrets needed for apply
         DIGITALOCEAN_TOKEN: ${{ secrets.DO_TOKEN }} # Needed by the provider during plan/apply
         TF_VAR_do_token: ${{ secrets.DO_TOKEN }} # Pass as TF_VAR as well
-        TF_VAR_repo_path: ${{ secrets.TF_VAR_repo_path }}
-        TF_VAR_database_url_prod: ${{ secrets.TF_VAR_database_url_prod }}
-        TF_VAR_flask_secret_key_prod: ${{ secrets.TF_VAR_flask_secret_key_prod }}
-        TF_VAR_adzuna_app_id: ${{ secrets.TF_VAR_adzuna_app_id }}
-        TF_VAR_adzuna_app_key: ${{ secrets.TF_VAR_adzuna_app_key }}
-        TF_VAR_azure_ai_endpoint: ${{ secrets.TF_VAR_azure_ai_endpoint }}
-        TF_VAR_azure_ai_key: ${{ secrets.TF_VAR_azure_ai_key }}
+        TF_VAR_repo_path: ${{ secrets.TEST_REPO_PATH }}
+        TF_VAR_database_url_prod: ${{ secrets.TEST_DATABASE_URL }}
+        TF_VAR_flask_secret_key_prod: ${{ secrets.TEST_FLASK_SECRET_KEY }}
+        TF_VAR_adzuna_app_id: ${{ secrets.TEST_ADZUNA_APP_ID }}
+        TF_VAR_adzuna_app_key: ${{ secrets.TEST_ADZUNA_APP_KEY }}
+        TF_VAR_azure_ai_endpoint: ${{ secrets.TEST_AZURE_AI_ENDPOINT }}
+        TF_VAR_azure_ai_key: ${{ secrets.TEST_AZURE_AI_KEY }}
       # Use '-auto-approve' for full automation, or remove it to require manual 'yes' in a future interactive setup
       # If using saved plan: run: terraform apply -auto-approve tfplan
       run: terraform apply -auto-approve -no-color
