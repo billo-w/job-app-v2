@@ -1,0 +1,94 @@
+name: Terraform Infrastructure CI/CD
+
+on:
+  # Allows manual triggering from the GitHub Actions UI
+  workflow_dispatch:
+    inputs:
+      terraform_action:
+        description: 'Terraform Action (plan or apply)'
+        required: true
+        default: 'plan'
+        type: choice
+        options:
+        - plan
+        - apply
+  # Optional: Trigger on pushes to a specific branch containing infrastructure code
+  # push:
+  #   branches:
+  #     - infra # Or your chosen branch for infrastructure changes
+  #   paths:
+  #     - '**.tf'
+  #     - '**.tfvars'
+
+jobs:
+  terraform:
+    name: 'Terraform ${{ github.event.inputs.terraform_action || 'Plan' }}' # Dynamic job name
+    runs-on: ubuntu-latest
+    env:
+      # Set non-sensitive Terraform variables here if needed
+      TF_VAR_app_name: "job-app" # Example from your tf file default
+      TF_VAR_app_region: "lon1"
+      TF_VAR_production_branch: "production"
+      # Sensitive variables are loaded from secrets below
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      # with:
+      #   terraform_version: "1.0.0" # Optional: specify version
+
+    - name: Terraform Format Check
+      id: fmt
+      run: terraform fmt -check
+      continue-on-error: true # Continue even if format check fails, but report it
+
+    - name: Terraform Init
+      id: init
+      env:
+        # Pass DO token for provider initialization if needed by backend config (usually not for standard)
+        DIGITALOCEAN_TOKEN: ${{ secrets.DO_TOKEN }}
+      run: terraform init
+
+    - name: Terraform Validate
+      id: validate
+      run: terraform validate -no-color
+
+    - name: Terraform Plan
+      id: plan
+      env:
+        # Pass ALL TF_VAR secrets needed for the plan
+        DIGITALOCEAN_TOKEN: ${{ secrets.DO_TOKEN }} # Needed by the provider during plan/apply
+        TF_VAR_do_token: ${{ secrets.DO_TOKEN }} # Pass as TF_VAR as well
+        TF_VAR_repo_path: ${{ secrets.TF_VAR_repo_path }}
+        TF_VAR_database_url_prod: ${{ secrets.TF_VAR_database_url_prod }}
+        TF_VAR_flask_secret_key_prod: ${{ secrets.TF_VAR_flask_secret_key_prod }}
+        TF_VAR_adzuna_app_id: ${{ secrets.TF_VAR_adzuna_app_id }}
+        TF_VAR_adzuna_app_key: ${{ secrets.TF_VAR_adzuna_app_key }}
+        TF_VAR_azure_ai_endpoint: ${{ secrets.TF_VAR_azure_ai_endpoint }}
+        TF_VAR_azure_ai_key: ${{ secrets.TF_VAR_azure_ai_key }}
+      run: terraform plan -no-color
+      # Optional: Add '-out=tfplan' to save the plan if you use manual approvals
+
+    # --- Apply Step - Only runs if manually triggered with 'apply' ---
+    - name: Terraform Apply
+      id: apply
+      # Only run if the workflow was manually dispatched with input 'apply'
+      if: github.event_name == 'workflow_dispatch' && github.event.inputs.terraform_action == 'apply'
+      env:
+        # Pass ALL TF_VAR secrets needed for apply
+        DIGITALOCEAN_TOKEN: ${{ secrets.DO_TOKEN }} # Needed by the provider during plan/apply
+        TF_VAR_do_token: ${{ secrets.DO_TOKEN }} # Pass as TF_VAR as well
+        TF_VAR_repo_path: ${{ secrets.TF_VAR_repo_path }}
+        TF_VAR_database_url_prod: ${{ secrets.TF_VAR_database_url_prod }}
+        TF_VAR_flask_secret_key_prod: ${{ secrets.TF_VAR_flask_secret_key_prod }}
+        TF_VAR_adzuna_app_id: ${{ secrets.TF_VAR_adzuna_app_id }}
+        TF_VAR_adzuna_app_key: ${{ secrets.TF_VAR_adzuna_app_key }}
+        TF_VAR_azure_ai_endpoint: ${{ secrets.TF_VAR_azure_ai_endpoint }}
+        TF_VAR_azure_ai_key: ${{ secrets.TF_VAR_azure_ai_key }}
+      # Use '-auto-approve' for full automation, or remove it to require manual 'yes' in a future interactive setup
+      # If using saved plan: run: terraform apply -auto-approve tfplan
+      run: terraform apply -auto-approve -no-color
+
