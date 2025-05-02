@@ -23,57 +23,7 @@ resource "digitalocean_app" "jobapp" {
     name   = var.app_name   # Value comes from variables.tf
     region = var.app_region # Value comes from variables.tf
 
-    # --- MOVED: Define Environment Variables directly under spec ---
-    # Using 'envs' as was common in older specs/providers
-    envs = [
-      {
-        key   = "FLASK_APP"
-        value = "app:create_app()" # Match run command
-        scope = "RUN_AND_BUILD_TIME" # Specify scope if needed
-      },
-      {
-        key   = "FLASK_ENV"
-        value = "production"
-        scope = "RUN_AND_BUILD_TIME"
-      },
-      {
-        key   = "DATABASE_URL"
-        value = var.database_url_prod # Value comes from variables.tf
-        type  = "SECRET"
-        scope = "RUN_AND_BUILD_TIME"
-      },
-      {
-        key   = "FLASK_SECRET_KEY"
-        value = var.flask_secret_key_prod # Value comes from variables.tf
-        type  = "SECRET"
-        scope = "RUN_TIME_ONLY" # Example: Only needed at runtime
-      },
-      {
-        key   = "ADZUNA_APP_ID"
-        value = var.adzuna_app_id # Value comes from variables.tf
-        type  = "SECRET"
-        scope = "RUN_TIME_ONLY"
-      },
-      {
-        key   = "ADZUNA_APP_KEY"
-        value = var.adzuna_app_key # Value comes from variables.tf
-        type  = "SECRET"
-        scope = "RUN_TIME_ONLY"
-      },
-      {
-        key   = "AZURE_AI_ENDPOINT"
-        value = var.azure_ai_endpoint # Value comes from variables.tf
-        type  = "SECRET"
-        scope = "RUN_TIME_ONLY"
-      },
-      {
-        key   = "AZURE_AI_KEY"
-        value = var.azure_ai_key # Value comes from variables.tf
-        type  = "SECRET"
-        scope = "RUN_TIME_ONLY"
-      },
-      # Add any other necessary environment variables
-    ]
+    # --- envs block REMOVED from here ---
 
     # Define the Web Service (your Flask app)
     service {
@@ -89,7 +39,56 @@ resource "digitalocean_app" "jobapp" {
       instance_size_slug = "basic-xxs" # Choose instance size
       instance_count     = 1          # Number of instances
 
-      # --- environment_vars block REMOVED from here ---
+      # --- MOVED: Define Environment Variables INSIDE service using 'envs' ---
+      envs = [
+        {
+          key   = "FLASK_APP"
+          value = "app:create_app()" # Match run command
+          scope = "RUN_AND_BUILD_TIME" # Specify scope if needed
+        },
+        {
+          key   = "FLASK_ENV"
+          value = "production"
+          scope = "RUN_AND_BUILD_TIME"
+        },
+        {
+          key   = "DATABASE_URL"
+          value = var.database_url_prod # Value comes from variables.tf
+          type  = "SECRET"
+          scope = "RUN_AND_BUILD_TIME"
+        },
+        {
+          key   = "FLASK_SECRET_KEY"
+          value = var.flask_secret_key_prod # Value comes from variables.tf
+          type  = "SECRET"
+          scope = "RUN_TIME_ONLY" # Example: Only needed at runtime
+        },
+        {
+          key   = "ADZUNA_APP_ID"
+          value = var.adzuna_app_id # Value comes from variables.tf
+          type  = "SECRET"
+          scope = "RUN_TIME_ONLY"
+        },
+        {
+          key   = "ADZUNA_APP_KEY"
+          value = var.adzuna_app_key # Value comes from variables.tf
+          type  = "SECRET"
+          scope = "RUN_TIME_ONLY"
+        },
+        {
+          key   = "AZURE_AI_ENDPOINT"
+          value = var.azure_ai_endpoint # Value comes from variables.tf
+          type  = "SECRET"
+          scope = "RUN_TIME_ONLY"
+        },
+        {
+          key   = "AZURE_AI_KEY"
+          value = var.azure_ai_key # Value comes from variables.tf
+          type  = "SECRET"
+          scope = "RUN_TIME_ONLY"
+        },
+        # Add any other necessary environment variables
+      ]
 
       # Define the run command (Correctly placed inside service)
       run_command = "gunicorn 'app:create_app()' --bind 0.0.0.0:$PORT --workers 2 --log-level info"
