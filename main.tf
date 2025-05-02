@@ -37,7 +37,7 @@ resource "digitalocean_app" "jobapp" {
       instance_size_slug = "basic-xxs" # Choose instance size
       instance_count     = 1          # Number of instances
 
-      # --- CORRECTED: Define multiple 'env' blocks ---
+      # --- Define multiple 'env' blocks with CORRECTED scope values ---
       env {
         key   = "FLASK_APP"
         value = "app:create_app()" # Match run command
@@ -52,37 +52,37 @@ resource "digitalocean_app" "jobapp" {
         key   = "DATABASE_URL"
         value = var.database_url_prod # Value comes from variables.tf
         type  = "SECRET"
-        scope = "RUN_AND_BUILD_TIME"
+        scope = "RUN_AND_BUILD_TIME" # Keep as RUN_AND_BUILD_TIME if migrations might need it
       }
       env {
         key   = "FLASK_SECRET_KEY"
         value = var.flask_secret_key_prod # Value comes from variables.tf
         type  = "SECRET"
-        scope = "RUN_TIME_ONLY"
+        scope = "RUN_TIME" # CORRECTED: Use RUN_TIME instead of RUN_TIME_ONLY
       }
       env {
         key   = "ADZUNA_APP_ID"
         value = var.adzuna_app_id # Value comes from variables.tf
         type  = "SECRET"
-        scope = "RUN_TIME_ONLY"
+        scope = "RUN_TIME" # CORRECTED: Use RUN_TIME instead of RUN_TIME_ONLY
       }
       env {
         key   = "ADZUNA_APP_KEY"
         value = var.adzuna_app_key # Value comes from variables.tf
         type  = "SECRET"
-        scope = "RUN_TIME_ONLY"
+        scope = "RUN_TIME" # CORRECTED: Use RUN_TIME instead of RUN_TIME_ONLY
       }
       env {
         key   = "AZURE_AI_ENDPOINT"
         value = var.azure_ai_endpoint # Value comes from variables.tf
         type  = "SECRET"
-        scope = "RUN_TIME_ONLY"
+        scope = "RUN_TIME" # CORRECTED: Use RUN_TIME instead of RUN_TIME_ONLY
       }
       env {
         key   = "AZURE_AI_KEY"
         value = var.azure_ai_key # Value comes from variables.tf
         type  = "SECRET"
-        scope = "RUN_TIME_ONLY"
+        scope = "RUN_TIME" # CORRECTED: Use RUN_TIME instead of RUN_TIME_ONLY
       }
       # Add other necessary env blocks here
 
