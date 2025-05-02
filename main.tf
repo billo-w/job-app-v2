@@ -4,7 +4,7 @@ terraform {
     digitalocean = {
       source  = "digitalocean/digitalocean"
       # Keep constraint, but init uses the installed v2.52.0
-      version = "~> 2.30"
+      version = "~> 2.30" # Or your compatible version
     }
   }
 }
@@ -52,7 +52,7 @@ resource "digitalocean_app" "jobapp" {
         key   = "DATABASE_URL"
         value = var.database_url_prod # Value comes from variables.tf
         type  = "SECRET"
-        scope = "RUN_AND_BUILD_TIME" # Keep as RUN_AND_BUILD_TIME if migrations might need it
+        scope = "RUN_AND_BUILD_TIME" # Needs to be available for build/migrations if applicable
       }
       env {
         key   = "FLASK_SECRET_KEY"
@@ -96,11 +96,46 @@ resource "digitalocean_app" "jobapp" {
       health_check {
         http_path = "/" # Path for HTTP health check (e.g., your home route)
       }
-    }
-    # Database block removed
-    # Migration job block removed
-  }
-}
+    } # End service block
+
+    # --- ADDED: Migration Job ---
+    job {
+      name = "migration-job"
+      kind = "PRE_DEPLOY" # Run before deploying the main service
+      instance_size_slug = "basic-xxs" # Can use smaller instance for jobs
+
+      # Source code for the job (usually same as service)
+      github {
+        repo             = var.repo_path
+        branch           = var.production_branch
+        deploy_on_push = true # Should match service setting
+      }
+
+      # Environment variables needed for the migration job
+      # Inherits app-level vars, but explicitly define crucial ones
+      env {
+        key   = "DATABASE_URL"
+        value = var.database_url_prod
+        type  = "SECRET"
+        scope = "RUN_AND_BUILD_TIME" # Needs DB URL at build/run time
+      }
+       env {
+        key   = "FLASK_APP"
+        value = "app:create_app()" # Needs to know how to load Flask context
+        scope = "RUN_AND_BUILD_TIME"
+      }
+      # Add other envs if your migrations depend on them
+
+      # Command to run migrations (apply existing migrations)
+      # --- CORRECTED COMMAND ---
+      run_command = "flask db upgrade"
+
+      # Optional: Build command if different from service or needed explicitly
+      # build_command = "pip install -r requirements.txt"
+    } # End job block
+
+  } # End spec block
+} # End resource block
 
 # --- Outputs ---
 # Output the App's default ingress URL
