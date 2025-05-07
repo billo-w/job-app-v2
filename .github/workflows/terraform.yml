@@ -1,6 +1,4 @@
 # .github/workflows/terraform.yml
-# Ensure this file uses spaces for indentation (2 spaces per level).
-# Replace the entire file content with this block.
 name: Terraform Infrastructure CI/CD
 
 on:
@@ -21,50 +19,36 @@ on:
   #     - infra # Or your chosen branch for infrastructure changes
   #   paths:
   #     - '**.tf'
-  #     - '**.tfvars'
+  #     - 'backend.tf' # Add backend file if using
 
-# Grant permissions for the GITHUB_TOKEN to push to the repo
-# This block should be at the root level (no indentation)
+# Grant permissions for the GITHUB_TOKEN (if needed for other steps, not TF Cloud)
 permissions:
-  contents: write
+  contents: read # Read is usually sufficient unless pushing code
 
-# jobs block should be at the root level (no indentation)
 jobs:
-  # terraform job definition should be indented 2 spaces
   terraform:
-    # Keys under the job should be indented 4 spaces
-    # --- SIMPLIFIED STATIC NAME ---
-    name: Terraform Plan/Apply
+    name: 'Terraform ${{ github.event.inputs.terraform_action || 'Plan' }}' # Dynamic job name
     runs-on: ubuntu-latest
-    env: # Indented 4 spaces
-      # Keys under env should be indented 6 spaces
-      TF_VAR_app_name: "job-app" # Example from your tf file default
-      TF_VAR_app_region: "lon1"
-      TF_VAR_production_branch: "production"
-      # Sensitive variables are loaded from secrets below
+    # Remove top-level env vars for TF_VARs, manage them in TFC UI
 
-    # steps block should be indented 4 spaces
     steps:
-    # Each step (name, uses, etc.) should be indented 6 spaces, starting with '-'
     - name: Checkout code
       uses: actions/checkout@v4
 
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
-      # with block (if used) indented 8 spaces
-      # with:
-      #   terraform_version: "1.0.0" # Optional: specify version
+      with:
+        # Configure Terraform Cloud credentials via token
+        cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
 
     - name: Terraform Format Check
       id: fmt
       run: terraform fmt -check
-      continue-on-error: true # Continue even if format check fails, but report it
+      continue-on-error: true
 
     - name: Terraform Init
       id: init
-      env: # env under step indented 8 spaces
-        # Keys under step env indented 10 spaces
-        DIGITALOCEAN_TOKEN: ${{ secrets.DO_TOKEN }}
+      # No DO_TOKEN needed here, backend config handles auth via TF_API_TOKEN
       run: terraform init
 
     - name: Terraform Validate
@@ -73,39 +57,17 @@ jobs:
 
     - name: Terraform Plan
       id: plan
-      env:
-        # Pass ALL TF_VAR secrets needed for apply
-        DIGITALOCEAN_TOKEN: ${{ secrets.DO_TOKEN }} # Needed by the provider during plan/apply
-        TF_VAR_do_token: ${{ secrets.DO_TOKEN }} # Pass as TF_VAR as well
-        TF_VAR_repo_path: ${{ secrets.TEST_REPO_PATH }}
-        TF_VAR_database_url_prod: ${{ secrets.TEST_DATABASE_URL }}
-        TF_VAR_flask_secret_key_prod: ${{ secrets.TEST_FLASK_SECRET_KEY }}
-        TF_VAR_adzuna_app_id: ${{ secrets.TEST_ADZUNA_APP_ID }}
-        TF_VAR_adzuna_app_key: ${{ secrets.TEST_ADZUNA_APP_KEY }}
-        TF_VAR_azure_ai_endpoint: ${{ secrets.TEST_AZURE_AI_ENDPOINT }}
-        TF_VAR_azure_ai_key: ${{ secrets.TEST_AZURE_AI_KEY }}
-
+      # Env vars (TF_VAR_*) are injected by Terraform Cloud based on workspace variables
+      # DIGITALOCEAN_TOKEN is also typically set as an Environment Variable in TFC workspace
       run: terraform plan -no-color
-      # Optional: Add '-out=tfplan' to save the plan if you use manual approvals
+      # Optional: Add '-out=tfplan' if needed
 
     # --- Apply Step - Only runs if manually triggered with 'apply' ---
     - name: Terraform Apply
       id: apply
       # Only run if the workflow was manually dispatched with input 'apply'
       if: github.event_name == 'workflow_dispatch' && github.event.inputs.terraform_action == 'apply'
-      env:
-        # Pass ALL TF_VAR secrets needed for apply
-        DIGITALOCEAN_TOKEN: ${{ secrets.DO_TOKEN }} # Needed by the provider during plan/apply
-        TF_VAR_do_token: ${{ secrets.DO_TOKEN }} # Pass as TF_VAR as well
-        TF_VAR_repo_path: ${{ secrets.TEST_REPO_PATH }}
-        TF_VAR_database_url_prod: ${{ secrets.TEST_DATABASE_URL }}
-        TF_VAR_flask_secret_key_prod: ${{ secrets.TEST_FLASK_SECRET_KEY }}
-        TF_VAR_adzuna_app_id: ${{ secrets.TEST_ADZUNA_APP_ID }}
-        TF_VAR_adzuna_app_key: ${{ secrets.TEST_ADZUNA_APP_KEY }}
-        TF_VAR_azure_ai_endpoint: ${{ secrets.TEST_AZURE_AI_ENDPOINT }}
-        TF_VAR_azure_ai_key: ${{ secrets.TEST_AZURE_AI_KEY }}
-
-      # Use '-auto-approve' for full automation, or remove it to require manual 'yes' in a future interactive setup
-      # If using saved plan: run: terraform apply -auto-approve tfplan
+      # Env vars (TF_VAR_*) are injected by Terraform Cloud based on workspace variables
+      # DIGITALOCEAN_TOKEN is also typically set as an Environment Variable in TFC workspace
       run: terraform apply -auto-approve -no-color
-
+      # If using saved plan: run: terraform apply -auto-approve tfplan

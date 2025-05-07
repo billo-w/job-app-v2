@@ -15,7 +15,7 @@ variable "repo_path" {
 variable "app_name" {
   description = "Name for the App Platform app"
   type        = string
-  default     = "job-app-v2"
+  default     = "job-app"
 }
 
 variable "app_region" {
