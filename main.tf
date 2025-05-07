@@ -1,12 +1,5 @@
 # Configure the DigitalOcean Provider
 terraform {
-  required_providers {
-    digitalocean = {
-      source  = "digitalocean/digitalocean"
-      # Keep constraint, but init uses the installed v2.52.0
-      version = "~> 2.30" # Or your compatible version
-    }
-  }
 }
 
 # --- Variables ---
