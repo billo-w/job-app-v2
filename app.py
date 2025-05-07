@@ -218,7 +218,7 @@ def get_ai_summary(query_details, total_jobs, job_listings_sample, salary_data):
     sample_descriptions_list = [ job['description'] for job in job_listings_sample[:5] if isinstance(job.get('description'), str) ]
     combined_descriptions = "\n---\n".join(sample_descriptions_list)
     max_desc_length = 1500
-    if len(combined_descriptions) > max_desc_length: combined_descriptions = combined_descriptions[:max_desc_length] + "..."
+    if len(combined_descriptions) > max_desc_length: combined_descriptions = combined_descriptions[:max_desc_length]
 
     salary_info = "Not available"
     if salary_data and salary_data.get('average'): salary_info = f"approximately {salary_data['average']:,} (currency based on country)"
