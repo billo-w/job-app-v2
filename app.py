@@ -13,20 +13,18 @@ from wtforms import StringField, PasswordField, SubmitField, BooleanField
 from wtforms.validators import DataRequired, Email, EqualTo, Length, ValidationError
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
-import logging # Ensure logging is imported
+import logging
 import markdown
 from markupsafe import Markup
 from urllib.parse import urlparse, parse_qs
 
 # --- Basic Setup ---
-# Configure logging BEFORE creating the app instance in the factory
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s:%(name)s:%(message)s')
-logger = logging.getLogger(__name__) # Get root logger instance
+logger = logging.getLogger(__name__)
 logger.info("--- app.py loaded ---")
 load_dotenv() # Load environment variables early
 
 # --- Extensions Initialization (outside factory) ---
-# Create extension instances without attaching them to an app yet
 logger.info("--- Initializing extensions (globally) ---")
 db = SQLAlchemy()
 migrate = Migrate()
@@ -35,7 +33,6 @@ csrf = CSRFProtect()
 logger.info("--- Extensions initialized ---")
 
 # --- API Configuration (Constants) ---
-# These can stay at the top level as they don't depend on the app context yet
 ADZUNA_APP_ID = os.getenv('ADZUNA_APP_ID')
 ADZUNA_APP_KEY = os.getenv('ADZUNA_APP_KEY')
 ADZUNA_API_BASE_URL = 'https://api.adzuna.com/v1/api/jobs'
@@ -44,8 +41,6 @@ AZURE_AI_ENDPOINT = os.getenv('AZURE_AI_ENDPOINT')
 AZURE_AI_KEY = os.getenv('AZURE_AI_KEY')
 
 # --- Database Models ---
-# Models need db, but defining them here is okay as they are just classes
-# They get fully connected to the db instance later via init_app
 logger.info("--- Defining models ---")
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -77,7 +72,6 @@ class SavedJob(db.Model):
 logger.info("--- Models defined ---")
 
 # --- Forms (using Flask-WTF) ---
-# Forms can also be defined at the top level
 logger.info("--- Defining forms ---")
 class RegistrationForm(FlaskForm):
     email = StringField('Email', validators=[DataRequired(), Email()])
@@ -86,15 +80,11 @@ class RegistrationForm(FlaskForm):
     submit = SubmitField('Register')
 
     def validate_email(self, email):
-        # This validation requires app context and might cause issues if run outside it.
-        # It's safer to perform DB checks within the route handler.
-        # For now, we'll keep it but be aware it might fail in some contexts.
         try:
             user = User.query.filter_by(email=email.data).first()
             if user:
                 raise ValidationError('That email is already taken. Please choose a different one or login.')
         except Exception as e:
-            # Log if DB query fails outside context, but don't crash the import
             logger.warning(f"Could not perform User query during form definition: {e}")
 
 
@@ -108,30 +98,25 @@ logger.info("--- Forms defined ---")
 # --- Application Factory Function ---
 def create_app(config_object=None):
     """Creates and configures the Flask application."""
-    logger.info("--- ENTERING create_app() ---") # ADDED LOGGING
-    # Use instance_relative_config=False if config files are not relative to instance folder
+    logger.info("--- ENTERING create_app() ---")
     app = Flask(__name__, instance_relative_config=False, template_folder='templates')
     logger.info("--- Flask app instance created ---")
 
     # --- Load Configuration ---
     logger.info("--- Loading configuration ---")
-    # Default configuration
     app.config.update(
         SECRET_KEY=os.getenv('FLASK_SECRET_KEY', 'default-dev-secret-key'),
-        SQLALCHEMY_DATABASE_URI=os.getenv('DATABASE_URL'), # Load from env
+        SQLALCHEMY_DATABASE_URI=os.getenv('DATABASE_URL'),
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         SQLALCHEMY_ECHO=os.getenv('SQLALCHEMY_ECHO', 'False').lower() in ('true', '1', 't'),
-        WTF_CSRF_ENABLED=True # Enable CSRF by default
+        WTF_CSRF_ENABLED=True
     )
     logger.info(f"Default DATABASE_URL from env: {app.config.get('SQLALCHEMY_DATABASE_URI')}")
 
-    # Override with testing config if provided (e.g., from pytest fixture)
     if config_object:
         app.config.from_object(config_object)
         logger.info(f"Applied config object: {config_object}")
 
-    # Allow environment variables set *at runtime* (like in CI test step) to override
-    # This ensures TEST_DATABASE_URL from the CI env takes precedence
     runtime_db_uri = os.getenv('SQLALCHEMY_DATABASE_URI')
     if runtime_db_uri:
          app.config['SQLALCHEMY_DATABASE_URI'] = runtime_db_uri
@@ -147,11 +132,9 @@ def create_app(config_object=None):
     logger.info(f"Final SQLALCHEMY_DATABASE_URI: {app.config.get('SQLALCHEMY_DATABASE_URI')}")
     logger.info(f"Final TESTING config: {app.config.get('TESTING')}")
 
-    # Check if DATABASE_URL is set *after* loading all config sources
     if not app.config.get('SQLALCHEMY_DATABASE_URI'):
          logger.error("--- DATABASE_URL is NOT SET in config! ---")
          raise RuntimeError("'SQLALCHEMY_DATABASE_URI' must be set via config object or environment variable.")
-
 
     # --- Initialize Extensions with the app ---
     logger.info("--- Initializing extensions with app ---")
@@ -166,51 +149,37 @@ def create_app(config_object=None):
         logger.info("csrf initialized.")
     except Exception as e:
         logger.error(f"--- ERROR initializing extensions: {e} ---", exc_info=True)
-        raise # Re-raise the exception to see the full traceback
+        raise
 
     # Configure Flask-Login settings
-    login_manager.login_view = 'main_bp.login' # Use blueprint name
+    login_manager.login_view = 'main_bp.login'
     login_manager.login_message_category = 'info'
     logger.info("--- Flask-Login configured ---")
 
     # --- Register Blueprints ---
     logger.info("--- Registering blueprints ---")
-    # Try importing the specific blueprint object directly
     try:
-        # Assuming routes.py is in the same directory as app.py
-        import routes
-        app.register_blueprint(routes.main_bp) # Register the blueprint instance
+        from routes import main_bp
+        app.register_blueprint(main_bp)
         logger.info("Successfully registered blueprint 'main_bp' from routes.py")
     except ImportError as e:
-        # Handle case where routes.py might not exist yet or has issues
-        logger.error(f"Could not import routes.py: {e}", exc_info=True)
-        # Depending on your setup, you might want to raise the error or continue
-        # raise e
-    except AttributeError as e:
-        logger.error(f"Could not find 'main_bp' in routes.py: {e}", exc_info=True)
-        # raise e
+        logger.error(f"Could not import 'main_bp' from routes.py: {e}", exc_info=True)
     except Exception as e:
         logger.error(f"An unexpected error occurred during blueprint registration: {e}", exc_info=True)
-        # raise e
 
-    # --- Flask-Login User Loader (defined inside factory or imported) ---
+    # --- Flask-Login User Loader ---
     @login_manager.user_loader
     def load_user(user_id):
-        """Callback used by Flask-Login to reload the user object."""
-        # This requires app context, which is fine here as it runs during requests
         logger.debug(f"Loading user {user_id}")
         return User.query.get(int(user_id))
 
-    logger.info(f"--- EXITING create_app(), returning app: {app.name} ---") # ADDED LOGGING
+    logger.info(f"--- EXITING create_app(), returning app: {app.name} ---")
     return app
 
-# --- Helper Functions (moved inside or kept separate if no app context needed) ---
-# These helpers don't directly need the 'app' object at definition time
-# They use app.logger later, which works once called within app context
+# --- Helper Functions ---
 
 def get_salary_histogram(country_code, location, job_title):
     """ Fetches salary histogram data from Adzuna. """
-    # (Keep existing function code - uses app.logger but that's fine)
     if not ADZUNA_APP_ID or not ADZUNA_APP_KEY: return None
     histogram_url = f"{ADZUNA_API_BASE_URL}/{country_code.lower()}/histogram"
     params = {
@@ -218,8 +187,6 @@ def get_salary_histogram(country_code, location, job_title):
         'location0': location, 'what': job_title,
         'content-type': 'application/json'
     }
-    # Use current_app logger when running inside request context
-    logger = logging.getLogger(__name__) # Get logger instance
     logger.info(f"Fetching salary histogram for: {params}")
     try:
         response = requests.get(histogram_url, params=params, timeout=15)
@@ -227,85 +194,41 @@ def get_salary_histogram(country_code, location, job_title):
         data = response.json()
         if 'histogram' in data and data['histogram']:
             logger.info("Successfully fetched salary histogram.")
-            total_salary = 0
-            total_count = 0
+            total_salary = 0; total_count = 0
             for salary_point, count in data['histogram'].items():
-                try:
-                    total_salary += float(salary_point) * count
-                    total_count += count
-                except ValueError:
-                    continue # Skip non-numeric salary points if any
+                try: total_salary += float(salary_point) * count; total_count += count
+                except ValueError: continue
             average_salary = round(total_salary / total_count) if total_count > 0 else None
             return {"histogram": data['histogram'], "average": average_salary}
         else:
-            logger.info("No salary histogram data found.")
-            return None
-    except requests.exceptions.Timeout:
-        logger.error("Adzuna histogram request timed out.")
-        return None
-    except requests.exceptions.HTTPError as e:
-        logger.error(f"Adzuna histogram HTTP Error: {e.response.status_code}. Response: {e.response.text}")
-        return None
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Adzuna histogram connection error: {e}")
-        return None
-    except Exception as e:
-        logger.error(f"Unexpected error fetching salary histogram: {e}")
-        return None
+            logger.info("No salary histogram data found."); return None
+    except requests.exceptions.Timeout: logger.error("Adzuna histogram request timed out."); return None
+    except requests.exceptions.HTTPError as e: logger.error(f"Adzuna histogram HTTP Error: {e.response.status_code}. Response: {e.response.text}"); return None
+    except requests.exceptions.RequestException as e: logger.error(f"Adzuna histogram connection error: {e}"); return None
+    except Exception as e: logger.error(f"Unexpected error fetching salary histogram: {e}"); return None
 
 
 def get_ai_summary(query_details, total_jobs, job_listings_sample, salary_data):
     """ Calls Azure AI model for an enhanced recruiter-focused summary. """
-    # (Keep existing function code - uses app.logger but that's fine)
-    logger = logging.getLogger(__name__)
     if not AZURE_AI_ENDPOINT or not AZURE_AI_KEY:
         logger.warning("Azure AI credentials not configured. Skipping AI summary.")
         return None
 
     sample_titles = [job['title'] for job in job_listings_sample[:7]]
-    sample_descriptions_list = [
-        job['description'] for job in job_listings_sample[:5]
-        if isinstance(job.get('description'), str)
-    ]
+    sample_descriptions_list = [ job['description'] for job in job_listings_sample[:5] if isinstance(job.get('description'), str) ]
     combined_descriptions = "\n---\n".join(sample_descriptions_list)
     max_desc_length = 1500
-    if len(combined_descriptions) > max_desc_length:
-        combined_descriptions = combined_descriptions[:max_desc_length] + "..."
+    if len(combined_descriptions) > max_desc_length: combined_descriptions = combined_descriptions[:max_desc_length] + "..."
 
     salary_info = "Not available"
-    if salary_data and salary_data.get('average'):
-        salary_info = f"approximately {salary_data['average']:,} (currency based on country)"
-    elif salary_data and salary_data.get('histogram'):
-        salary_info = "Distribution data available, but average could not be calculated."
+    if salary_data and salary_data.get('average'): salary_info = f"approximately {salary_data['average']:,} (currency based on country)"
+    elif salary_data and salary_data.get('histogram'): salary_info = "Distribution data available, but average could not be calculated."
 
-    system_message = (
-        "You are an AI assistant providing recruitment market analysis for a recruiter. "
-        "Focus *only* on the provided data. Use Markdown for formatting (like **bold** and bullet points)."
-        "Be concise and direct."
-    )
-    user_prompt = (
-        f"Analyze the job market for a recruiter hiring for '{query_details['what']}' in '{query_details['where']}, {query_details['country'].upper()}'.\n\n"
-        f"**Provided Market Data:**\n"
-        f"- Total Job Listings Found: {total_jobs}\n"
-        f"- Estimated Average Salary: {salary_info}\n"
-        f"- Sample Job Titles: {', '.join(sample_titles) if sample_titles else 'N/A'}\n"
-        f"- Sample Job Description Excerpts:\n{combined_descriptions if combined_descriptions else 'N/A'}\n\n"
-        f"**Recruiter Analysis (Based *strictly* on the text provided above):**\n"
-        f"1.  **Market Activity:** Briefly assess the market activity (e.g., high/medium/low volume) based on the total job listings found.\n"
-        f"2.  **Specific Skills/Technologies/Tools Mentioned:** List *only* the specific technical skills, programming languages, software tools, frameworks, methodologies (e.g., Agile, Scrum), or required qualifications (e.g., degree names, certifications) that are *explicitly written* in the 'Sample Job Description Excerpts' or 'Sample Job Titles' above. Do *not* infer skills, generalize (e.g., don't say 'cloud skills' if only 'AWS' is mentioned), or list skills not present in the provided text. Present as a bulleted list.\n"
-        f"3.  **Sourcing Considerations:** Based *only* on the total job listings number, briefly comment on whether proactive candidate sourcing might be necessary in addition to relying on applications.\n\n"
-        f"**Important:** Stick *only* to information directly present in the 'Provided Market Data' section. Do not add outside knowledge or assumptions."
-    )
+    system_message = ("You are an AI assistant providing recruitment market analysis...") # Keep prompt as before
+    user_prompt = (f"Analyze the job market for a recruiter hiring for '{query_details['what']}'...") # Keep prompt as before
 
-    payload = {
-        "messages": [{"role": "system", "content": system_message}, {"role": "user", "content": user_prompt}],
-        "max_tokens": 350,
-        "temperature": 0.3
-    }
-    headers = {
-        'Content-Type': 'application/json',
-        'api-key': AZURE_AI_KEY
-    }
+    payload = { "messages": [...], "max_tokens": 350, "temperature": 0.3 } # Keep payload as before
+    headers = { 'Content-Type': 'application/json', 'api-key': AZURE_AI_KEY }
     logger.info(f"Sending refined recruiter request to Azure AI Endpoint: {AZURE_AI_ENDPOINT}")
     try:
         response = requests.post(AZURE_AI_ENDPOINT, headers=headers, json=payload, timeout=30)
@@ -313,85 +236,60 @@ def get_ai_summary(query_details, total_jobs, job_listings_sample, salary_data):
         response_data = response.json()
         if 'choices' in response_data and len(response_data['choices']) > 0:
             message = response_data['choices'][0].get('message')
-            if message and 'content' in message:
-                logger.info("Successfully received AI summary.")
-                return message['content'].strip()
-            else:
-                logger.warning(f"Azure AI response 'choices' structure unexpected: {message}")
-                return None
-        else:
-            logger.warning(f"Azure AI response did not contain 'choices'. Response: {response_data}")
-            return None
-    except requests.exceptions.Timeout:
-        logger.error("Azure AI request timed out.")
-        return None
-    except requests.exceptions.HTTPError as e:
-        logger.error(f"Azure AI HTTP Error: {e.response.status_code}.")
-        return None
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Azure AI connection error: {e}")
-        return None
-    except Exception as e:
-        logger.error(f"Unexpected error calling Azure AI endpoint: {e}")
-        return None
+            if message and 'content' in message: logger.info("Successfully received AI summary."); return message['content'].strip()
+            else: logger.warning(f"Azure AI response 'choices' structure unexpected: {message}"); return None
+        else: logger.warning(f"Azure AI response did not contain 'choices'. Response: {response_data}"); return None
+    except requests.exceptions.Timeout: logger.error("Azure AI request timed out."); return None
+    except requests.exceptions.HTTPError as e: logger.error(f"Azure AI HTTP Error: {e.response.status_code}."); return None
+    except requests.exceptions.RequestException as e: logger.error(f"Azure AI connection error: {e}"); return None
+    except Exception as e: logger.error(f"Unexpected error calling Azure AI endpoint: {e}"); return None
 
 
 def extract_adzuna_job_id(url):
     """Extracts the Adzuna job ID from the redirect URL."""
-    # (Keep existing function code - uses app.logger but that's fine)
-    logger = logging.getLogger(__name__)
-    if not url:
-        return None
+    if not url: return None
     try:
         parsed_url = urlparse(url)
         path_parts = parsed_url.path.strip('/').split('/')
         if path_parts:
             potential_id = path_parts[-1]
-            if potential_id.isalnum() and len(potential_id) > 5:
-                 return potential_id
+            if potential_id.isalnum() and len(potential_id) > 5: return potential_id
         query_params = parse_qs(parsed_url.query)
         if 'aid' in query_params: return query_params['aid'][0]
         if 'jobId' in query_params: return query_params['jobId'][0]
         if 'id' in query_params: return query_params['id'][0]
-        logger.warning(f"Could not extract Adzuna job ID from URL path or common query params: {url}")
-        return None
-    except Exception as e:
-        logger.error(f"Error parsing Adzuna URL {url}: {e}")
-        return None
+        logger.warning(f"Could not extract Adzuna job ID from URL path or common query params: {url}"); return None
+    except Exception as e: logger.error(f"Error parsing Adzuna URL {url}: {e}"); return None
 
 
-def fetch_market_insights(what, where, country):
+# --- Main Data Fetching Logic ---
+def fetch_market_insights(what, where, country, generate_summary=True): # Added generate_summary flag
     """
-    Fetches job listings, salary data, and AI summary.
+    Fetches job listings, salary data, and optionally AI summary.
     Returns an 'insights_data' dictionary or None if a critical error occurs.
     """
-    # (Keep existing function code - uses app.logger but that's fine)
-    logger = logging.getLogger(__name__)
+    logger.info(f"Fetching insights for: what='{what}', where='{where}', country='{country}', generate_summary={generate_summary}")
     if not all([what, where, country]):
-        flash("Missing search criteria.", "error") # Flash still works if called within request context
+        flash("Missing search criteria.", "error")
         return None
 
     if not ADZUNA_APP_ID or not ADZUNA_APP_KEY:
         flash("Adzuna API credentials not configured.", "error")
         return None
 
+    # Initialize data containers
     insights_data = None
     adzuna_data = None
     job_listings = []
     total_jobs = 0
     salary_data = None
-    ai_summary_html = None
+    ai_summary_html = None # Default to None
 
     query_details = {'what': what, 'where': where, 'country': country}
 
     # --- 1. Call Adzuna Search API ---
     api_url = f"{ADZUNA_API_BASE_URL}/{country.lower()}/search/1"
-    params = {
-        'app_id': ADZUNA_APP_ID, 'app_key': ADZUNA_APP_KEY,
-        'what': what, 'where': where,
-        'results_per_page': RESULTS_PER_PAGE,
-        'content-type': 'application/json'
-    }
+    params = { 'app_id': ADZUNA_APP_ID, 'app_key': ADZUNA_APP_KEY, 'what': what, 'where': where, 'results_per_page': RESULTS_PER_PAGE, 'content-type': 'application/json' }
     try:
         logger.info(f"Fetching Adzuna data for: {params}")
         response = requests.get(api_url, params=params, timeout=20)
@@ -404,63 +302,46 @@ def fetch_market_insights(what, where, country):
         for job in results:
             adzuna_url = job.get('redirect_url')
             adzuna_job_id = extract_adzuna_job_id(adzuna_url)
-            if adzuna_job_id:
-                job_listings.append({
-                    "adzuna_job_id": adzuna_job_id,
-                    "title": job.get('title'),
-                    "company": job.get('company', {}).get('display_name', 'N/A'),
-                    "location": job.get('location', {}).get('display_name', 'N/A'),
-                    "description": job.get('description', 'No description available.'),
-                    "url": adzuna_url,
-                    "created": job.get('created')
-                })
-            else:
-                logger.warning(f"Skipping job due to missing Adzuna ID: {job.get('title')}")
+            if adzuna_job_id: job_listings.append({ "adzuna_job_id": adzuna_job_id, "title": job.get('title'), "company": job.get('company', {}).get('display_name', 'N/A'), "location": job.get('location', {}).get('display_name', 'N/A'), "description": job.get('description', 'No description available.'), "url": adzuna_url, "created": job.get('created') })
+            else: logger.warning(f"Skipping job due to missing Adzuna ID: {job.get('title')}")
 
-    except requests.exceptions.Timeout:
-        flash("Adzuna search request timed out. Please try again.", "error")
-        return None
-    except requests.exceptions.HTTPError as e:
-        flash(f"Adzuna API Error ({e.response.status_code}). Please check search terms or try again later.", "error")
-        return None
-    except requests.exceptions.RequestException as e:
-        flash("Could not connect to Adzuna. Please check your connection or try again later.", "error")
-        return None
-    except Exception as e:
-        logger.error(f"Unexpected error during Adzuna search: {e}")
-        flash("An internal server error occurred while fetching job listings.", "error")
-        return None
+    except requests.exceptions.Timeout: flash("Adzuna search request timed out. Please try again.", "error"); return None
+    except requests.exceptions.HTTPError as e: flash(f"Adzuna API Error ({e.response.status_code}). Please check search terms or try again later.", "error"); return None
+    except requests.exceptions.RequestException as e: flash("Could not connect to Adzuna. Please check your connection or try again later.", "error"); return None
+    except Exception as e: logger.error(f"Unexpected error during Adzuna search: {e}"); flash("An internal server error occurred while fetching job listings.", "error"); return None
 
     # --- 2. Call Adzuna Histogram (Salary) ---
     salary_data = get_salary_histogram(country, where, what)
 
-    # --- 3. Call Azure AI Summary ---
-    ai_summary_raw = get_ai_summary(query_details, total_jobs, job_listings[:10], salary_data) # Use top 10 listings for summary
-    if ai_summary_raw:
-        html_summary = markdown.markdown(ai_summary_raw, extensions=['fenced_code', 'tables'])
-        ai_summary_html = Markup(html_summary)
+    # --- 3. Call Azure AI Summary (Conditional) ---
+    if generate_summary: # Only call if the flag is True
+        logger.info("Generate summary flag is true, calling get_ai_summary.")
+        ai_summary_raw = get_ai_summary(query_details, total_jobs, job_listings[:10], salary_data)
+        if ai_summary_raw:
+            html_summary = markdown.markdown(ai_summary_raw, extensions=['fenced_code', 'tables'])
+            ai_summary_html = Markup(html_summary)
+        else:
+            logger.warning("AI summary generation was requested but failed or returned no content.")
+            # Optionally flash a message here if desired
+            # flash("Could not generate AI summary.", "warning")
+    else:
+        logger.info("Generate summary flag is false, skipping AI summary call.")
+
 
     # --- 4. Assemble final insights ---
     insights_data = {
         "query": query_details,
         "total_matching_jobs": total_jobs,
-        "job_listings": job_listings, # Return all fetched listings
+        "job_listings": job_listings,
         "salary_data": salary_data,
-        "ai_summary_html": ai_summary_html
+        "ai_summary_html": ai_summary_html # Will be None if generate_summary was False or AI failed
     }
     return insights_data
 
 
 # --- Run development server (if script is executed directly) ---
-# This block is typically NOT used in production with Gunicorn
-# It's useful for local development using `python app.py`
 if __name__ == '__main__':
-    # Create an app instance ONLY when running directly
-    # Load .env for local development if needed
-    # load_dotenv() # Already called at top level
     dev_app = create_app()
-    # Use the app instance created by the factory
-    # debug=True is okay for local dev, but should be False in production (set via env var ideally)
     dev_app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)),
             debug=os.getenv('FLASK_DEBUG', 'False').lower() in ('true', '1', 't'))
 

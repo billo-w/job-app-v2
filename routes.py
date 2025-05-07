@@ -1,13 +1,18 @@
-# routes.py
-from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, current_app
+from flask import (Blueprint, render_template, request, flash, redirect, url_for,
+                   jsonify, current_app) # Import current_app for logger
 from flask_login import login_required, current_user, login_user, logout_user
 import logging
-from urllib.parse import urlparse # Make sure this is imported if used
+from urllib.parse import urlparse, urlunparse # Added urlunparse
 
-# Import from the main app module (assuming app.py and routes.py are siblings)
-from app import db, User, SavedJob, RegistrationForm, LoginForm, fetch_market_insights
+# Import necessary components from your main module (or models/forms files if separated)
+# Assuming app.py structure where these are defined or imported
+from app import db, User, SavedJob, RegistrationForm, LoginForm
+from app import fetch_market_insights # Import the main data fetching helper
 
+# Create a Blueprint
 main_bp = Blueprint('main_bp', __name__)
+
+# Get logger instance
 logger = logging.getLogger(__name__)
 
 # --- Main Routes ---
@@ -17,22 +22,30 @@ def home():
     what = request.args.get('what', '')
     where = request.args.get('where', '')
     country = request.args.get('country', '')
-    form_data = {'what': what, 'where': where, 'country': country}
+    # Get the summary flag, default to 'true' if not present or doing initial load
+    generate_summary_flag = request.args.get('generate_summary', 'true') == 'true'
+
+    form_data = {
+        'what': what,
+        'where': where,
+        'country': country,
+        'generate_summary': 'true' if generate_summary_flag else 'false' # Keep for form pre-fill
+    }
 
     insights_data = None
     saved_job_ids = set()
 
     if what and where and country:
         logger.info(f"Home route received search parameters: {form_data}")
-        # Call the helper function to fetch all data
-        insights_data = fetch_market_insights(what, where, country)
+        # Pass the boolean flag to the fetch function
+        insights_data = fetch_market_insights(what, where, country, generate_summary=generate_summary_flag)
 
     if current_user.is_authenticated:
         saved_job_ids = {job.adzuna_job_id for job in current_user.saved_jobs}
 
     return render_template('index.html',
                            insights=insights_data,
-                           form_data=form_data,
+                           form_data=form_data, # Pass form_data to pre-fill search boxes & checkbox
                            saved_job_ids=saved_job_ids)
 
 
@@ -42,13 +55,19 @@ def get_insights():
     what = request.form.get('what')
     where = request.form.get('where')
     country = request.form.get('country')
+    # Check if the checkbox was checked - its value will be 'true' if checked, None otherwise
+    generate_summary = 'true' if request.form.get('generate_summary') == 'true' else 'false'
 
     if not all([what, where, country]):
         flash("Please fill in all search fields.", "error")
         return redirect(url_for('main_bp.home')) # Use blueprint name
 
     # Redirect to the home route with parameters in the query string
-    return redirect(url_for('main_bp.home', what=what, where=where, country=country))
+    return redirect(url_for('main_bp.home',
+                            what=what,
+                            where=where,
+                            country=country,
+                            generate_summary=generate_summary)) # Pass summary flag
 
 
 # --- Authentication Routes ---
@@ -89,10 +108,15 @@ def login():
             next_page = request.args.get('next')
             # Use url_for with blueprint name for internal redirect check
             safe_next_page = url_for('main_bp.home') # Default redirect
-            if next_page and urlparse(next_page).netloc == '': # Basic security check
-                 # Could add more checks here to ensure it's a valid internal route
-                 safe_next_page = next_page
-                 logger.info(f"Redirecting logged in user to: {safe_next_page}")
+            if next_page:
+                # Basic security check: Ensure it's a relative path within the app
+                # Avoid redirecting to external URLs
+                target = urlparse(next_page)
+                if not target.netloc and target.path:
+                    safe_next_page = next_page
+                    logger.info(f"Redirecting logged in user to: {safe_next_page}")
+                else:
+                    logger.warning(f"Ignoring potentially unsafe next_page: {next_page}")
             else:
                  logger.info("Redirecting logged in user to home.")
 
