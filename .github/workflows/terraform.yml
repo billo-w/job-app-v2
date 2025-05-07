@@ -1,6 +1,8 @@
 # .github/workflows/terraform.yml
+# Ensure this file uses spaces for indentation (2 spaces per level is common).
 name: Terraform Infrastructure CI/CD
 
+# 'on' block at the root level (no indentation)
 on:
   # Allows manual triggering from the GitHub Actions UI
   workflow_dispatch:
@@ -21,34 +23,41 @@ on:
   #     - '**.tf'
   #     - 'backend.tf' # Add backend file if using
 
-# Grant permissions for the GITHUB_TOKEN (if needed for other steps, not TF Cloud)
+# 'permissions' block at the root level (no indentation)
 permissions:
-  contents: read # Read is usually sufficient unless pushing code
+  contents: read # Read is usually sufficient for plan/apply with TFC token
 
+# 'jobs' block at the root level (no indentation)
 jobs:
+  # 'terraform' job ID, indented 2 spaces under 'jobs'
   terraform:
-    name: 'Terraform ${{ github.event.inputs.terraform_action || 'Plan' }}' # Dynamic job name
+    # Keys under the job ID ('terraform'), indented 4 spaces
+    name: 'Terraform ${{ github.event.inputs.terraform_action || 'Plan' }}'
     runs-on: ubuntu-latest
-    # Remove top-level env vars for TF_VARs, manage them in TFC UI
+    # Job-level 'env' block was removed as variables are managed in Terraform Cloud UI
 
+    # 'steps' block, indented 4 spaces (same level as 'name' and 'runs-on')
     steps:
+    # Each step (denoted by '-') is indented 6 spaces
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v4 # 'uses' indented 8 spaces
 
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
-      with:
-        # Configure Terraform Cloud credentials via token
+      with: # 'with' indented 8 spaces
+        # 'cli_config_credentials_token' indented 10 spaces
         cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
 
     - name: Terraform Format Check
       id: fmt
-      run: terraform fmt -check
+      run: terraform fmt -check # 'run' indented 8 spaces
       continue-on-error: true
 
     - name: Terraform Init
       id: init
-      # No DO_TOKEN needed here, backend config handles auth via TF_API_TOKEN
+      # 'env' under a step, indented 8 spaces
+      # env:
+      #   DIGITALOCEAN_TOKEN: ${{ secrets.DO_TOKEN }} # This is not strictly needed for TFC init if backend is configured
       run: terraform init
 
     - name: Terraform Validate
@@ -57,17 +66,17 @@ jobs:
 
     - name: Terraform Plan
       id: plan
-      # Env vars (TF_VAR_*) are injected by Terraform Cloud based on workspace variables
-      # DIGITALOCEAN_TOKEN is also typically set as an Environment Variable in TFC workspace
+      # Env vars (TF_VAR_*) are typically injected by Terraform Cloud based on workspace variables.
+      # If your provider block needs direct auth (like DO_TOKEN), set it in TFC workspace env vars.
       run: terraform plan -no-color
       # Optional: Add '-out=tfplan' if needed
 
     # --- Apply Step - Only runs if manually triggered with 'apply' ---
     - name: Terraform Apply
       id: apply
-      # Only run if the workflow was manually dispatched with input 'apply'
+      # 'if' condition indented 8 spaces
       if: github.event_name == 'workflow_dispatch' && github.event.inputs.terraform_action == 'apply'
-      # Env vars (TF_VAR_*) are injected by Terraform Cloud based on workspace variables
-      # DIGITALOCEAN_TOKEN is also typically set as an Environment Variable in TFC workspace
+      # Env vars (TF_VAR_*) are typically injected by Terraform Cloud.
       run: terraform apply -auto-approve -no-color
       # If using saved plan: run: terraform apply -auto-approve tfplan
+
