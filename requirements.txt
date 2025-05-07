@@ -10,3 +10,4 @@ psycopg2-binary>=2.9 # Or psycopg2 if you prefer compiling
 gunicorn>=20.0 # Recommended for deployment
 pytest
 email_validator
+json
