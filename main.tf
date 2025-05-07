@@ -2,14 +2,6 @@
 terraform {
 }
 
-# --- Variables ---
-# Variable definitions are ONLY in variables.tf
-
-# --- Provider Configuration ---
-provider "digitalocean" {
-  token = var.do_token # Value comes from variables.tf
-}
-
 # --- DigitalOcean App Platform App Resource ---
 resource "digitalocean_app" "jobapp" {
   spec {
