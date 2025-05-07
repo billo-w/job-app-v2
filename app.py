@@ -218,31 +218,74 @@ def get_ai_summary(query_details, total_jobs, job_listings_sample, salary_data):
     sample_descriptions_list = [ job['description'] for job in job_listings_sample[:5] if isinstance(job.get('description'), str) ]
     combined_descriptions = "\n---\n".join(sample_descriptions_list)
     max_desc_length = 1500
-    if len(combined_descriptions) > max_desc_length: combined_descriptions = combined_descriptions[:max_desc_length] + "..."
+    if len(combined_descriptions) > max_desc_length:
+        combined_descriptions = combined_descriptions[:max_desc_length] + "..." # Use string ellipsis
 
     salary_info = "Not available"
     if salary_data and salary_data.get('average'): salary_info = f"approximately {salary_data['average']:,} (currency based on country)"
     elif salary_data and salary_data.get('histogram'): salary_info = "Distribution data available, but average could not be calculated."
 
-    system_message = ("You are an AI assistant providing recruitment market analysis...") # Keep prompt as before
-    user_prompt = (f"Analyze the job market for a recruiter hiring for '{query_details['what']}'...") # Keep prompt as before
+    system_message = (
+        "You are an AI assistant providing recruitment market analysis for a recruiter. "
+        "Focus *only* on the provided data. Use Markdown for formatting (like **bold** and bullet points)."
+        "Be concise and direct."
+    )
+    user_prompt = (
+        f"Analyze the job market for a recruiter hiring for '{query_details['what']}' in '{query_details['where']}, {query_details['country'].upper()}'.\n\n"
+        f"**Provided Market Data:**\n"
+        f"- Total Job Listings Found: {total_jobs}\n"
+        f"- Estimated Average Salary: {salary_info}\n"
+        f"- Sample Job Titles: {', '.join(sample_titles) if sample_titles else 'N/A'}\n"
+        f"- Sample Job Description Excerpts:\n{combined_descriptions if combined_descriptions else 'N/A'}\n\n"
+        f"**Recruiter Analysis (Based *strictly* on the text provided above):**\n"
+        f"1.  **Market Activity:** Briefly assess the market activity (e.g., high/medium/low volume) based on the total job listings found.\n"
+        f"2.  **Specific Skills/Technologies/Tools Mentioned:** List *only* the specific technical skills, programming languages, software tools, frameworks, methodologies (e.g., Agile, Scrum), or required qualifications (e.g., degree names, certifications) that are *explicitly written* in the 'Sample Job Description Excerpts' or 'Sample Job Titles' above. Do *not* infer skills, generalize (e.g., don't say 'cloud skills' if only 'AWS' is mentioned), or list skills not present in the provided text. Present as a bulleted list.\n"
+        f"3.  **Sourcing Considerations:** Based *only* on the total job listings number, briefly comment on whether proactive candidate sourcing might be necessary in addition to relying on applications.\n\n"
+        f"**Important:** Stick *only* to information directly present in the 'Provided Market Data' section. Do not add outside knowledge or assumptions."
+    )
 
-    payload = { "messages": ["..."], "max_tokens": 350, "temperature": 0.3 } # Keep payload as before
+    payload = {
+        "messages": [{"role": "system", "content": system_message}, {"role": "user", "content": user_prompt}],
+        "max_tokens": 350,
+        "temperature": 0.3
+    }
     headers = { 'Content-Type': 'application/json', 'api-key': AZURE_AI_KEY }
-    logger.info(f"Sending refined recruiter request to Azure AI Endpoint: {AZURE_AI_ENDPOINT}")
+
+    # --- ADDED LOGGING ---
+    logger.info(f"Attempting to call Azure AI Endpoint: {AZURE_AI_ENDPOINT}")
     try:
+        # Log the payload before sending (use json.dumps for pretty printing)
+        logger.debug(f"Azure AI Request Payload:\n{json.dumps(payload, indent=2)}")
+
         response = requests.post(AZURE_AI_ENDPOINT, headers=headers, json=payload, timeout=30)
-        response.raise_for_status()
+        response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
         response_data = response.json()
+
         if 'choices' in response_data and len(response_data['choices']) > 0:
             message = response_data['choices'][0].get('message')
-            if message and 'content' in message: logger.info("Successfully received AI summary."); return message['content'].strip()
-            else: logger.warning(f"Azure AI response 'choices' structure unexpected: {message}"); return None
-        else: logger.warning(f"Azure AI response did not contain 'choices'. Response: {response_data}"); return None
-    except requests.exceptions.Timeout: logger.error("Azure AI request timed out."); return None
-    except requests.exceptions.HTTPError as e: logger.error(f"Azure AI HTTP Error: {e.response.status_code}."); return None
-    except requests.exceptions.RequestException as e: logger.error(f"Azure AI connection error: {e}"); return None
-    except Exception as e: logger.error(f"Unexpected error calling Azure AI endpoint: {e}"); return None
+            if message and 'content' in message:
+                logger.info("Successfully received AI summary.")
+                return message['content'].strip()
+            else:
+                logger.warning(f"Azure AI response 'choices' structure unexpected: {message}")
+                return None
+        else:
+            logger.warning(f"Azure AI response did not contain 'choices'. Response: {response_data}")
+            return None
+    except requests.exceptions.Timeout:
+        logger.error("Azure AI request timed out.")
+        return None
+    except requests.exceptions.HTTPError as e:
+        # --- ADDED LOGGING ---
+        # Log the status code and the response text/body for 4xx/5xx errors
+        logger.error(f"Azure AI HTTP Error: {e.response.status_code}. Response Body: {e.response.text}")
+        return None
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Azure AI connection error: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"Unexpected error calling Azure AI endpoint: {e}", exc_info=True) # Log full traceback
+        return None
 
 
 def extract_adzuna_job_id(url):
