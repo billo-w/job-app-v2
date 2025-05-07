@@ -218,7 +218,7 @@ def get_ai_summary(query_details, total_jobs, job_listings_sample, salary_data):
     sample_descriptions_list = [ job['description'] for job in job_listings_sample[:5] if isinstance(job.get('description'), str) ]
     combined_descriptions = "\n---\n".join(sample_descriptions_list)
     max_desc_length = 1500
-    if len(combined_descriptions) > max_desc_length: combined_descriptions = combined_descriptions[:max_desc_length]
+    if len(combined_descriptions) > max_desc_length: combined_descriptions = combined_descriptions[:max_desc_length] + "..."
 
     salary_info = "Not available"
     if salary_data and salary_data.get('average'): salary_info = f"approximately {salary_data['average']:,} (currency based on country)"
@@ -227,7 +227,7 @@ def get_ai_summary(query_details, total_jobs, job_listings_sample, salary_data):
     system_message = ("You are an AI assistant providing recruitment market analysis...") # Keep prompt as before
     user_prompt = (f"Analyze the job market for a recruiter hiring for '{query_details['what']}'...") # Keep prompt as before
 
-    payload = { "messages": [...], "max_tokens": 350, "temperature": 0.3 } # Keep payload as before
+    payload = { "messages": ["..."], "max_tokens": 350, "temperature": 0.3 } # Keep payload as before
     headers = { 'Content-Type': 'application/json', 'api-key': AZURE_AI_KEY }
     logger.info(f"Sending refined recruiter request to Azure AI Endpoint: {AZURE_AI_ENDPOINT}")
     try:
