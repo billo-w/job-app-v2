@@ -51,6 +51,12 @@
                            placeholder="e.g., gb, us, de">
                 </div>
             </div>
+
+            <div class="flex items-center justify-center pt-2">
+                <input type="checkbox" name="generate_summary" id="generate_summary" value="true" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-slate-300 rounded mr-2" {% if form_data.get('generate_summary') == 'true' %}checked{% endif %}>
+                <label for="generate_summary" class="text-sm font-medium text-slate-700">Generate AI Recruitment Analysis?</label>
+            </div>
+
             <div class="text-center pt-3">
                 <button type="submit" class="inline-flex items-center justify-center py-3 px-10 border border-transparent shadow-md text-base font-semibold rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-500 transition-all-ease transform hover:-translate-y-0.5">
                     <i class="fas fa-search mr-2 -ml-1 h-5 w-5"></i> Analyze Market
@@ -86,7 +92,7 @@
         </div>
         {% endif %}
 
-        {% if insights.ai_summary_html %}
+        {% if insights.ai_summary_html %} {# This existing check handles whether to show it #}
         <div class="ai-summary-box p-6 rounded-lg">
             <h3 class="text-lg font-semibold mb-2.5 flex items-center text-sky-900">
                 <i class="fa-solid fa-user-tie mr-2.5 text-sky-500 fa-lg"></i> AI Recruitment Analysis
