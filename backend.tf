@@ -1,9 +1,9 @@
 # backend.tf
 terraform {
   cloud {
-    organization = "<YOUR_ORG_NAME>"
+    organization = "Belal_Waw"
     workspaces {
-      name = "<YOUR_WORKSPACE_NAME>"
+      name = "digitalocean-flask-app"
     }
   }
 }
