@@ -1,3 +1,4 @@
+# .github/workflows/terraform.yml
 name: Terraform Infrastructure CI/CD
 
 on:
@@ -13,17 +14,20 @@ on:
         - apply
 
 permissions:
-  contents: write
+  contents: read # Read is sufficient as TFC token handles auth to TFC
 
 jobs:
   terraform:
-    # --- SIMPLIFIED STATIC JOB NAME ---
-    name: Terraform Plan or Apply
+    name: 'Terraform ${{ github.event.inputs.terraform_action || 'Plan' }}'
     runs-on: ubuntu-latest
+    # Environment variables defined here are for the runner environment.
+    # Terraform Cloud will inject workspace variables (TF_VAR_* and Environment Variables)
+    # when it executes the plan/apply.
     env:
-      TF_VAR_app_name: "job-app"
-      TF_VAR_app_region: "lon1"
-      TF_VAR_production_branch: "production"
+      # This is for the DigitalOcean provider to authenticate if it's not set as an
+      # Environment Variable in your Terraform Cloud workspace named DIGITALOCEAN_TOKEN.
+      # If DO_TOKEN is set as an Environment Variable in TFC, this isn't strictly needed here.
+      DIGITALOCEAN_TOKEN: ${{ secrets.DO_TOKEN }}
 
     steps:
     - name: Checkout code
@@ -32,7 +36,7 @@ jobs:
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
       with:
-        # Configure Terraform Cloud credentials via token
+        # This token allows the runner to authenticate to Terraform Cloud
         cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
 
     - name: Terraform Format Check
@@ -42,8 +46,9 @@ jobs:
 
     - name: Terraform Init
       id: init
-      env:
-        DIGITALOCEAN_TOKEN: ${{ secrets.DO_TOKEN }}
+      # DIGITALOCEAN_TOKEN in the job's env block might be picked up by the provider during init
+      # if the provider block is configured to look for it and it's not in TFC env vars.
+      # However, TFC should handle provider auth if configured with credentials.
       run: terraform init
 
     - name: Terraform Validate
@@ -52,29 +57,14 @@ jobs:
 
     - name: Terraform Plan
       id: plan
-      env:
-        DIGITALOCEAN_TOKEN: ${{ secrets.DO_TOKEN }}
-        TF_VAR_do_token: ${{ secrets.DO_TOKEN }}
-        TF_VAR_repo_path: ${{ secrets.TF_VAR_repo_path }}
-        TF_VAR_database_url_prod: ${{ secrets.TF_VAR_database_url_prod }}
-        TF_VAR_flask_secret_key_prod: ${{ secrets.TF_VAR_flask_secret_key_prod }}
-        TF_VAR_adzuna_app_id: ${{ secrets.TF_VAR_adzuna_app_id }}
-        TF_VAR_adzuna_app_key: ${{ secrets.TF_VAR_adzuna_app_key }}
-        TF_VAR_azure_ai_endpoint: ${{ secrets.TF_VAR_azure_ai_endpoint }}
-        TF_VAR_azure_ai_key: ${{ secrets.TF_VAR_azure_ai_key }}
+      # TF_VAR_* variables are now expected to be set in the Terraform Cloud workspace
+      # and will be automatically available to this command when run by TFC.
+      # The DIGITALOCEAN_TOKEN from the job's env block will be available for the provider.
       run: terraform plan -no-color
 
     - name: Terraform Apply
       id: apply
       if: github.event_name == 'workflow_dispatch' && github.event.inputs.terraform_action == 'apply'
-      env:
-        DIGITALOCEAN_TOKEN: ${{ secrets.DO_TOKEN }}
-        TF_VAR_do_token: ${{ secrets.DO_TOKEN }}
-        TF_VAR_repo_path: ${{ secrets.TF_VAR_repo_path }}
-        TF_VAR_database_url_prod: ${{ secrets.TF_VAR_database_url_prod }}
-        TF_VAR_flask_secret_key_prod: ${{ secrets.TF_VAR_flask_secret_key_prod }}
-        TF_VAR_adzuna_app_id: ${{ secrets.TF_VAR_adzuna_app_id }}
-        TF_VAR_adzuna_app_key: ${{ secrets.TF_VAR_adzuna_app_key }}
-        TF_VAR_azure_ai_endpoint: ${{ secrets.TF_VAR_azure_ai_endpoint }}
-        TF_VAR_azure_ai_key: ${{ secrets.TF_VAR_azure_ai_key }}
+      # TF_VAR_* variables are now expected to be set in the Terraform Cloud workspace.
+      # The DIGITALOCEAN_TOKEN from the job's env block will be available for the provider.
       run: terraform apply -auto-approve -no-color
