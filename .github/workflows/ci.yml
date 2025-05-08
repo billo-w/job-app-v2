@@ -1,4 +1,4 @@
-name: Flask CI/CD
+name: Flask CI/CD Deploy to Droplet
 
 on:
   push:
@@ -8,25 +8,19 @@ on:
     branches:
       - main # Trigger on pull requests targeting main
 
-# --- ADD THIS PERMISSIONS BLOCK ---
-permissions:
-  contents: write # Allow workflow to push to the repository (needed for production branch update)
-# --- END PERMISSIONS BLOCK ---
-
 jobs:
   build_and_test:
-    runs-on: ubuntu-latest # Use a standard Linux runner
+    runs-on: ubuntu-latest
     services:
-      # Start a PostgreSQL database container for tests
       postgres:
-        image: postgres:15 # Use a specific version
+        image: postgres:15
         env:
           POSTGRES_USER: testuser
           POSTGRES_PASSWORD: testpassword
           POSTGRES_DB: jobapp_testdb
         ports:
-          - 5432:5432 # Map port to access it from the runner
-        options: >- # Wait for DB to be ready
+          - 5432:5432
+        options: >-
           --health-cmd pg_isready
           --health-interval 10s
           --health-timeout 5s
@@ -34,7 +28,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4 # Action to get your code
+      uses: actions/checkout@v4
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -45,27 +39,23 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        pip install pytest # Ensure pytest is installed in CI
+        pip install pytest
 
     - name: Run tests
       env:
-        PYTHONPATH: . # Ensure app module can be found
-        # Environment variables for your tests
-        TEST_DATABASE_URL: postgresql://testuser:testpassword@localhost:5432/jobapp_testdb # Connect to the service container DB
+        PYTHONPATH: .
+        TEST_DATABASE_URL: postgresql://testuser:testpassword@localhost:5432/jobapp_testdb
         FLASK_APP: app:app
         FLASK_ENV: testing
-        WTF_CSRF_ENABLED: "False" # Often disable CSRF for tests
-        # Add other secrets/variables needed for tests below, using GitHub Secrets
+        WTF_CSRF_ENABLED: "False"
         FLASK_SECRET_KEY: ${{ secrets.TEST_FLASK_SECRET_KEY || 'test-ci-key' }}
-        # Add dummy values or secrets for external APIs if tests need them
         ADZUNA_APP_ID: ${{ secrets.TEST_ADZUNA_APP_ID || 'dummy' }}
         ADZUNA_APP_KEY: ${{ secrets.TEST_ADZUNA_APP_KEY || 'dummy' }}
         AZURE_AI_ENDPOINT: ${{ secrets.TEST_AZURE_AI_ENDPOINT || 'dummy' }}
         AZURE_AI_KEY: ${{ secrets.TEST_AZURE_AI_KEY || 'dummy' }}
-      run: pytest tests/ # Command to run your tests
+      run: pytest tests/
 
-  # --- Deployment Step (Push to Production Branch) ---
-  deploy_to_production_branch:
+  deploy_to_droplet:
     needs: build_and_test # Run only if tests pass
     runs-on: ubuntu-latest
     # Run only on direct pushes to 'main', not on PRs
@@ -74,22 +64,31 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      with:
-        fetch-depth: 0 # Needed for merge history
 
-    - name: Merge main to production & Push
-      run: |
-        git config --global user.name 'github-actions[bot]'
-        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-        # Check out production branch, creating if it doesn't exist locally
-        git fetch origin production:production || git checkout -b production origin/production || git checkout -b production
-        git checkout production
-        git pull origin production # Make sure local production is up-to-date
-        echo "Merging main (${{ github.sha }}) into production..."
-        # Merge the commit that triggered the workflow from main
-        git merge --no-ff ${{ github.sha }} -m "Auto-merge main (${{ github.sha }}) into production [ci skip]"
-        echo "Pushing production branch to origin..."
-        git push origin production
-      env:
-        # GITHUB_TOKEN is automatically provided by Actions and will use the 'contents: write' permission
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Deploy to Droplet via SSH
+      uses: appleboy/ssh-action@v1.0.3 # Action to run commands over SSH
+      with:
+        host: ${{ secrets.DROPLET_IP }} # Droplet IP from secrets
+        username: ${{ secrets.DROPLET_USER }} # Droplet user from secrets (e.g., billo)
+        key: ${{ secrets.SSH_PRIVATE_KEY }} # Private SSH key from secrets
+        port: 22 # Default SSH port
+        # Use rsync to efficiently copy files, excluding .git and venv
+        # Assumes target directory /home/USER/job-app exists on Droplet
+        sync: "-avz --delete --exclude='.git' --exclude='venv/' --exclude='.env' --exclude='__pycache__/' ./ ${{ secrets.DROPLET_USER }}@${{ secrets.DROPLET_IP }}:/home/${{ secrets.DROPLET_USER }}/job-app/"
+        script: |
+          # Commands to run remotely on the Droplet
+          echo "--- Starting Deployment Script on Droplet ---"
+          cd /home/${{ secrets.DROPLET_USER }}/job-app # Navigate to app directory
+          echo "--- Activating virtual environment ---"
+          source venv/bin/activate
+          echo "--- Installing/Updating dependencies ---"
+          pip install --no-cache-dir -r requirements.txt
+          echo "--- Running Database Migrations ---"
+          flask db upgrade
+          echo "--- Restarting Gunicorn Service ---"
+          # Use sudo to restart the systemd service
+          # Ensure your droplet user has passwordless sudo rights for systemctl,
+          # OR configure sudoers specifically for restarting this service.
+          sudo systemctl restart jobapp
+          echo "--- Deployment Script Finished ---"
+
