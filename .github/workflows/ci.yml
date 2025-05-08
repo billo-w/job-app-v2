@@ -67,8 +67,8 @@ jobs:
 
     # --- Step 1: Deploy files using rsync over SSH ---
     - name: Deploy code via rsync
-      # --- UPDATED ACTION VERSION ---
-      uses: easingthemes/ssh-deploy@v5 # Use major version tag
+      # --- UPDATED ACTION VERSION TO @main ---
+      uses: easingthemes/ssh-deploy@main # Use @main tag
       with:
         SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         ARGS: "-avz --delete" # rsync arguments
