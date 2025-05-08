@@ -64,19 +64,41 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-
-    # --- Step 1: Deploy files using rsync over SSH ---
-    - name: Deploy code via rsync
-      # --- UPDATED ACTION VERSION TO @main ---
-      uses: easingthemes/ssh-deploy@main # Use @main tag
       with:
-        SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-        ARGS: "-avz --delete" # rsync arguments
-        SOURCE: "./" # Source directory on runner
-        REMOTE_HOST: ${{ secrets.DROPLET_IP }}
-        REMOTE_USER: ${{ secrets.DROPLET_USER }}
-        TARGET: "/home/${{ secrets.DROPLET_USER }}/job-app/" # Target directory on Droplet
-        EXCLUDE: "/.git/, /venv/, /.env, /__pycache__/" # Exclude patterns
+        fetch-depth: 0 # Fetch all history for deployment logging if needed
+
+    # --- Step 1: Deploy files using scp via ssh-action ---
+    # Note: This copies the whole directory. For large projects, rsync is better,
+    # but scp is simpler if rsync action has issues.
+    - name: Deploy code via scp
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.DROPLET_IP }}
+        username: ${{ secrets.DROPLET_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        port: 22
+        script: |
+          # Create target directory if it doesn't exist
+          mkdir -p /home/${{ secrets.DROPLET_USER }}/job-app-deploy-target
+          echo "Target directory ensured."
+      # Continue on error allows the next scp step to run even if mkdir fails (if dir exists)
+      continue-on-error: true
+
+    - name: Secure Copy files
+      run: |
+        # Create a temporary file for the private key
+        echo "${{ secrets.SSH_PRIVATE_KEY }}" > deploy_key.pem
+        chmod 600 deploy_key.pem
+        # Use scp to copy files recursively, excluding specified directories
+        scp -o StrictHostKeyChecking=no -i deploy_key.pem -r \
+          --exclude '.git' \
+          --exclude 'venv' \
+          --exclude '.env' \
+          --exclude '__pycache__' \
+          . ${{ secrets.DROPLET_USER }}@${{ secrets.DROPLET_IP }}:/home/${{ secrets.DROPLET_USER }}/job-app-deploy-target/
+        # Remove the temporary key file
+        rm deploy_key.pem
+      # This step uses the runner's scp command directly
 
     # --- Step 2: Run commands remotely via SSH ---
     - name: Run deployment commands on Droplet
@@ -86,13 +108,16 @@ jobs:
         username: ${{ secrets.DROPLET_USER }}
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         port: 22
-        # Removed the 'sync:' line
         script: |
-          # Commands to run remotely on the Droplet
           echo "--- Starting Deployment Script on Droplet ---"
-          cd /home/${{ secrets.DROPLET_USER }}/job-app # Navigate to app directory
+          # Move files from temporary target to actual app directory, overwriting existing
+          # This provides a slightly more atomic update
+          echo "Moving deployed files into place..."
+          rsync -a --delete /home/${{ secrets.DROPLET_USER }}/job-app-deploy-target/ /home/${{ secrets.DROPLET_USER }}/job-app/
+          rm -rf /home/${{ secrets.DROPLET_USER }}/job-app-deploy-target # Clean up temp dir
+          # Navigate to app directory
+          cd /home/${{ secrets.DROPLET_USER }}/job-app
           echo "--- Activating virtual environment ---"
-          # Check if venv exists, create if not (optional, good for first deploy)
           if [ ! -d "venv" ]; then
             echo "Creating virtual environment..."
             python3 -m venv venv
@@ -103,9 +128,6 @@ jobs:
           echo "--- Running Database Migrations ---"
           flask db upgrade
           echo "--- Restarting Gunicorn Service ---"
-          # Use sudo to restart the systemd service
-          # Ensure your droplet user has passwordless sudo rights for systemctl,
-          # OR configure sudoers specifically for restarting this service.
           sudo systemctl restart jobapp
           echo "--- Deployment Script Finished ---"
 
