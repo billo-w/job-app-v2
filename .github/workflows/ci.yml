@@ -67,10 +67,9 @@ jobs:
       with:
         fetch-depth: 0 # Fetch all history for deployment logging if needed
 
-    # --- Step 1: Deploy files using scp via ssh-action ---
-    # Note: This copies the whole directory. For large projects, rsync is better,
-    # but scp is simpler if rsync action has issues.
-    - name: Deploy code via scp
+    # --- Step 1: Create target directory via ssh-action ---
+    # Ensures the target directory exists before scp
+    - name: Ensure target directory exists
       uses: appleboy/ssh-action@v1.0.3
       with:
         host: ${{ secrets.DROPLET_IP }}
@@ -78,29 +77,26 @@ jobs:
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         port: 22
         script: |
-          # Create target directory if it doesn't exist
           mkdir -p /home/${{ secrets.DROPLET_USER }}/job-app-deploy-target
           echo "Target directory ensured."
       # Continue on error allows the next scp step to run even if mkdir fails (if dir exists)
       continue-on-error: true
 
+    # --- Step 2: Secure Copy files using scp ---
     - name: Secure Copy files
       run: |
         # Create a temporary file for the private key
         echo "${{ secrets.SSH_PRIVATE_KEY }}" > deploy_key.pem
         chmod 600 deploy_key.pem
-        # Use scp to copy files recursively, excluding specified directories
+        # Use scp to copy files recursively
+        # REMOVED --exclude flags as scp doesn't support them this way
         scp -o StrictHostKeyChecking=no -i deploy_key.pem -r \
-          --exclude '.git' \
-          --exclude 'venv' \
-          --exclude '.env' \
-          --exclude '__pycache__' \
           . ${{ secrets.DROPLET_USER }}@${{ secrets.DROPLET_IP }}:/home/${{ secrets.DROPLET_USER }}/job-app-deploy-target/
         # Remove the temporary key file
         rm deploy_key.pem
       # This step uses the runner's scp command directly
 
-    # --- Step 2: Run commands remotely via SSH ---
+    # --- Step 3: Run commands remotely via SSH ---
     - name: Run deployment commands on Droplet
       uses: appleboy/ssh-action@v1.0.3
       with:
@@ -111,9 +107,9 @@ jobs:
         script: |
           echo "--- Starting Deployment Script on Droplet ---"
           # Move files from temporary target to actual app directory, overwriting existing
-          # This provides a slightly more atomic update
-          echo "Moving deployed files into place..."
-          rsync -a --delete /home/${{ secrets.DROPLET_USER }}/job-app-deploy-target/ /home/${{ secrets.DROPLET_USER }}/job-app/
+          # This provides a slightly more atomic update and handles deletion of old files
+          echo "Moving deployed files into place using rsync..."
+          rsync -a --delete --exclude '.git/' --exclude 'venv/' --exclude '.env' --exclude '__pycache__/' /home/${{ secrets.DROPLET_USER }}/job-app-deploy-target/ /home/${{ secrets.DROPLET_USER }}/job-app/
           rm -rf /home/${{ secrets.DROPLET_USER }}/job-app-deploy-target # Clean up temp dir
           # Navigate to app directory
           cd /home/${{ secrets.DROPLET_USER }}/job-app
