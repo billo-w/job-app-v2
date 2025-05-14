@@ -27,7 +27,6 @@ jobs:
       # This is for the DigitalOcean provider to authenticate if it's not set as an
       # Environment Variable in your Terraform Cloud workspace named DIGITALOCEAN_TOKEN.
       # If DO_TOKEN is set as an Environment Variable in TFC, this isn't strictly needed here.
-      DIGITALOCEAN_TOKEN: ${{ secrets.DO_TOKEN }}
 
     steps:
     - name: Checkout code
