@@ -1,9 +1,3 @@
-variable "do_token" {
-  description = "DigitalOcean API Token"
-  type        = string
-  sensitive   = true
-}
-
 variable "droplet_name" {
   description = "Name for the Droplet"
   type        = string
