@@ -64,66 +64,69 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      with:
-        fetch-depth: 0 # Fetch all history for deployment logging if needed
 
-    # --- Step 1: Create target directory via ssh-action ---
-    # Ensures the target directory exists before scp
-    - name: Ensure target directory exists
-      uses: appleboy/ssh-action@v1.0.3
+    - name: Setup SSH Agent
+      uses: webfactory/ssh-agent@v0.9.0
       with:
-        host: ${{ secrets.DROPLET_IP }}
-        username: ${{ secrets.DROPLET_USER }}
-        key: ${{ secrets.SSH_PRIVATE_KEY }}
-        port: 22
-        script: |
-          mkdir -p /home/${{ secrets.DROPLET_USER }}/job-app-deploy-target
-          echo "Target directory ensured."
-      # Continue on error allows the next scp step to run even if mkdir fails (if dir exists)
-      continue-on-error: true
+        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
-    # --- Step 2: Secure Copy files using scp ---
-    - name: Secure Copy files
+    - name: Create a temporary deployment directory on Droplet
       run: |
-        # Create a temporary file for the private key
-        echo "${{ secrets.SSH_PRIVATE_KEY }}" > deploy_key.pem
-        chmod 600 deploy_key.pem
-        # Use scp to copy files recursively
-        # REMOVED --exclude flags as scp doesn't support them this way
-        scp -o StrictHostKeyChecking=no -i deploy_key.pem -r \
-          . ${{ secrets.DROPLET_USER }}@${{ secrets.DROPLET_IP }}:/home/${{ secrets.DROPLET_USER }}/job-app-deploy-target/
-        # Remove the temporary key file
-        rm deploy_key.pem
-      # This step uses the runner's scp command directly
+        ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+        ${{ secrets.DROPLET_USER }}@${{ secrets.DROPLET_IP }} \
+        "mkdir -p /home/${{ secrets.DROPLET_USER }}/job-app-deploy-target"
 
-    # --- Step 3: Run commands remotely via SSH ---
+    - name: Deploy code via rsync
+      run: |
+        # Use rsync with SSH. The key is handled by ssh-agent.
+        rsync -avz --delete \
+          -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
+          --exclude '.git/' \
+          --exclude 'venv/' \
+          --exclude '.env' \
+          --exclude '__pycache__/' \
+          --exclude '.DS_Store' \
+          --exclude 'migrations/' \
+          ./ ${{ secrets.DROPLET_USER }}@${{ secrets.DROPLET_IP }}:/home/${{ secrets.DROPLET_USER }}/job-app-deploy-target/
+
     - name: Run deployment commands on Droplet
-      uses: appleboy/ssh-action@v1.0.3
-      with:
-        host: ${{ secrets.DROPLET_IP }}
-        username: ${{ secrets.DROPLET_USER }}
-        key: ${{ secrets.SSH_PRIVATE_KEY }}
-        port: 22
-        script: |
+      run: |
+        ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+        ${{ secrets.DROPLET_USER }}@${{ secrets.DROPLET_IP }} << 'EOF'
           echo "--- Starting Deployment Script on Droplet ---"
-          # Move files from temporary target to actual app directory, overwriting existing
-          # This provides a slightly more atomic update and handles deletion of old files
+          
           echo "Moving deployed files into place using rsync..."
-          rsync -a --delete --exclude '.git/' --exclude 'venv/' --exclude '.env' --exclude '__pycache__/' /home/${{ secrets.DROPLET_USER }}/job-app-deploy-target/ /home/${{ secrets.DROPLET_USER }}/job-app/
-          rm -rf /home/${{ secrets.DROPLET_USER }}/job-app-deploy-target # Clean up temp dir
-          # Navigate to app directory
+          rsync -a --delete \
+            /home/${{ secrets.DROPLET_USER }}/job-app-deploy-target/ \
+            /home/${{ secrets.DROPLET_USER }}/job-app/
+          
+          # Ensure .env file is present in the final location if it's not rsynced
+          # For example, if you manage it manually on the server:
+          # if [ ! -f "/home/${{ secrets.DROPLET_USER }}/job-app/.env" ]; then
+          #   echo "WARNING: .env file not found in /home/${{ secrets.DROPLET_USER }}/job-app/"
+          # fi
+
+          echo "Cleaning up temporary deployment directory..."
+          rm -rf /home/${{ secrets.DROPLET_USER }}/job-app-deploy-target
+          
+          echo "Navigating to app directory..."
           cd /home/${{ secrets.DROPLET_USER }}/job-app
+          
           echo "--- Activating virtual environment ---"
           if [ ! -d "venv" ]; then
             echo "Creating virtual environment..."
             python3 -m venv venv
           fi
           source venv/bin/activate
+          
           echo "--- Installing/Updating dependencies ---"
           pip install --no-cache-dir -r requirements.txt
+          
           echo "--- Running Database Migrations ---"
           flask db upgrade
+          
           echo "--- Restarting Gunicorn Service ---"
           sudo systemctl restart jobapp
+          
           echo "--- Deployment Script Finished ---"
-
+        EOF
