@@ -1,11 +1,5 @@
     # providers.tf
     terraform {
-      cloud {
-        organization = "<YOUR_TFC_ORG_NAME>" # Replace with your Terraform Cloud organization
-        workspaces {
-          name = "<YOUR_TFC_WORKSPACE_NAME_FOR_DROPLET>" # e.g., "job-app-droplet-prod"
-        }
-      }
       required_providers {
         digitalocean = {
           source  = "digitalocean/digitalocean"
