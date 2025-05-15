@@ -1,9 +1,9 @@
 # backend.tf
 terraform {
   cloud {
-    organization = "Belal_Waw"
+    organization = "<YOUR_TFC_ORG_NAME>" # Keep your organization name
     workspaces {
-      name = "digitalocean-flask-app"
+      name = "<YOUR_NEW_WORKSPACE_NAME>" # UPDATE THIS LINE
     }
   }
 }
