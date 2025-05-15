@@ -1,9 +1,9 @@
 # backend.tf
 terraform {
   cloud {
-    organization = "<YOUR_TFC_ORG_NAME>" # Keep your organization name
+    organization = "Belal_Waw" # Keep your organization name
     workspaces {
-      name = "<YOUR_NEW_WORKSPACE_NAME>" # UPDATE THIS LINE
+      name = "job-app-v2" # UPDATE THIS LINE
     }
   }
 }
