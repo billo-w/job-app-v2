@@ -36,11 +36,11 @@ jobs:
       TF_VAR_ssh_key_name: ${{ secrets.TF_VAR_SSH_KEY_NAME }}
       TF_VAR_repo_path: ${{ secrets.TF_VAR_REPO_PATH }}
       TF_VAR_database_url_prod: ${{ secrets.TF_VAR_DATABASE_URL_PROD }}
-      TF_VAR_flask_secret_key_prod: ${{ secrets.TF_VAR_FLASK_SECRET_KEY_PROD }}
-      TF_VAR_adzuna_app_id: ${{ secrets.TF_VAR_ADZUNA_APP_ID }}
-      TF_VAR_adzuna_app_key: ${{ secrets.TF_VAR_ADZUNA_APP_KEY }}
-      TF_VAR_azure_ai_endpoint: ${{ secrets.TF_VAR_AZURE_AI_ENDPOINT }}
-      TF_VAR_azure_ai_key: ${{ secrets.TF_VAR_AZURE_AI_KEY }}
+      TF_VAR_flask_secret_key_prod: ${{ secrets.TEST_FLASK_SECRET_KEY }}
+      TF_VAR_adzuna_app_id: ${{ secrets.TEST_ADZUNA_APP_ID }}
+      TF_VAR_adzuna_app_key: ${{ secrets.TEST_ADZUNA_APP_KEY }}
+      TF_VAR_azure_ai_endpoint: ${{ secrets.TEST_AZURE_AI_ENDPOINT }}
+      TF_VAR_azure_ai_key: ${{ secrets.TEST_AZURE_AI_KEY }}
       # Add any other TF_VAR_ variables declared in your variables.tf
 
     steps:
