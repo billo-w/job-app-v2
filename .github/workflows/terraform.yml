@@ -18,8 +18,16 @@ permissions:
 
 jobs:
   terraform:
-    name: Terraform Plan or Apply # Static name
+    name: Terraform Plan or Apply
     runs-on: ubuntu-latest
+    # Environment variables set here are for the runner's environment.
+    # Terraform Cloud will inject workspace variables (TF_VAR_* and Environment Variables like DIGITALOCEAN_TOKEN)
+    # when it executes the plan/apply.
+    env:
+      # This is primarily for the DigitalOcean provider to authenticate during 'terraform init'
+      # if it needs to access the DO API before TFC fully takes over the run.
+      # Ensure DIGITALOCEAN_TOKEN is also set as an Environment Variable in your TFC workspace.
+      DIGITALOCEAN_TOKEN: ${{ secrets.DO_TOKEN }}
 
     steps:
     - name: Checkout code
@@ -38,9 +46,8 @@ jobs:
 
     - name: Terraform Init
       id: init
-      # DIGITALOCEAN_TOKEN in the job's env block might be picked up by the provider during init
-      # if the provider block is configured to look for it and it's not in TFC env vars.
-      # However, TFC should handle provider auth if configured with credentials.
+      # The DIGITALOCEAN_TOKEN from the job's env block will be available for 'terraform init'.
+      # Terraform Cloud backend configuration in your .tf files will take over from here.
       run: terraform init
 
     - name: Terraform Validate
@@ -49,14 +56,16 @@ jobs:
 
     - name: Terraform Plan
       id: plan
-      # TF_VAR_* variables are now expected to be set in the Terraform Cloud workspace
+      # All TF_VAR_* variables (like TF_VAR_ssh_key_name, TF_VAR_repo_path, etc.)
+      # are now expected to be set in the Terraform Cloud workspace
+      # (either directly or via an applied Variable Set)
       # and will be automatically available to this command when run by TFC.
-      # The DIGITALOCEAN_TOKEN from the job's env block will be available for the provider.
+      # The DIGITALOCEAN_TOKEN for provider auth should also be set as an Environment Variable in TFC.
       run: terraform plan -no-color
 
     - name: Terraform Apply
       id: apply
       if: github.event_name == 'workflow_dispatch' && github.event.inputs.terraform_action == 'apply'
-      # TF_VAR_* variables are now expected to be set in the Terraform Cloud workspace.
-      # The DIGITALOCEAN_TOKEN from the job's env block will be available for the provider.
+      # All TF_VAR_* variables and provider auth (DIGITALOCEAN_TOKEN)
+      # are expected to be set in the Terraform Cloud workspace.
       run: terraform apply -auto-approve -no-color
