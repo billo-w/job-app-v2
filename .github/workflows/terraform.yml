@@ -14,33 +14,34 @@ on:
         - apply
 
 permissions:
-  contents: read # Read is sufficient as TFC token handles auth to TFC
+  contents: read
 
 jobs:
   terraform:
-    name: Terraform Plan or Apply # Static name
+    name: Terraform Plan or Apply
     runs-on: ubuntu-latest
-    # Global environment variables for the job
-    # TF_VAR_ variables will be picked up by Terraform
     env:
       # For provider authentication (Terraform will pick this up)
       DIGITALOCEAN_TOKEN: ${{ secrets.DO_TOKEN }}
-      # For variables declared in variables.tf
-      TF_VAR_app_name: "job-app" # Or from secrets if it varies
-      TF_VAR_app_region: "lon1"  # Or from secrets
-      TF_VAR_production_branch: "production" # Or from secrets
+
+      # --- Explicitly define all TF_VAR_ variables using GitHub Secrets ---
+      # Ensure corresponding secrets exist in your GitHub repository settings.
       TF_VAR_droplet_name: ${{ secrets.TF_VAR_DROPLET_NAME || 'job-app-server-tf' }}
       TF_VAR_droplet_region: ${{ secrets.TF_VAR_DROPLET_REGION || 'lon1' }}
       TF_VAR_droplet_size: ${{ secrets.TF_VAR_DROPLET_SIZE || 's-1vcpu-1gb' }}
       TF_VAR_droplet_image: ${{ secrets.TF_VAR_DROPLET_IMAGE || 'ubuntu-22-04-x64' }}
-      TF_VAR_ssh_key_name: ${{ secrets.TF_VAR_SSH_KEY_NAME }}
+      TF_VAR_ssh_key_name_for_root: ${{ secrets.TF_VAR_SSH_KEY_NAME_FOR_ROOT }}
+      TF_VAR_deployment_ssh_public_key: ${{ secrets.TF_VAR_DEPLOYMENT_SSH_PUBLIC_KEY }}
+      TF_VAR_app_user_name: ${{ secrets.TF_VAR_APP_USER_NAME || 'billo' }}
+      TF_VAR_cloud_firewall_id: ${{ secrets.TF_VAR_CLOUD_FIREWALL_ID }} # Crucial one
+      TF_VAR_existing_reserved_ip_address: ${{ secrets.TF_VAR_EXISTING_RESERVED_IP_ADDRESS }}
       TF_VAR_repo_path: ${{ secrets.TF_VAR_REPO_PATH }}
       TF_VAR_database_url_prod: ${{ secrets.TF_VAR_DATABASE_URL_PROD }}
-      TF_VAR_flask_secret_key_prod: ${{ secrets.TEST_FLASK_SECRET_KEY }}
-      TF_VAR_adzuna_app_id: ${{ secrets.TEST_ADZUNA_APP_ID }}
-      TF_VAR_adzuna_app_key: ${{ secrets.TEST_ADZUNA_APP_KEY }}
-      TF_VAR_azure_ai_endpoint: ${{ secrets.TEST_AZURE_AI_ENDPOINT }}
-      TF_VAR_azure_ai_key: ${{ secrets.TEST_AZURE_AI_KEY }}
+      TF_VAR_flask_secret_key_prod: ${{ secrets.TF_VAR_FLASK_SECRET_KEY_PROD }}
+      TF_VAR_adzuna_app_id: ${{ secrets.TF_VAR_ADZUNA_APP_ID }}
+      TF_VAR_adzuna_app_key: ${{ secrets.TF_VAR_ADZUNA_APP_KEY }}
+      TF_VAR_azure_ai_endpoint: ${{ secrets.TF_VAR_AZURE_AI_ENDPOINT }}
+      TF_VAR_azure_ai_key: ${{ secrets.TF_VAR_AZURE_AI_KEY }}
       # Add any other TF_VAR_ variables declared in your variables.tf
 
     steps:
@@ -50,7 +51,6 @@ jobs:
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
       with:
-        # This token allows the runner to authenticate to Terraform Cloud for state and locking
         cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
 
     - name: Terraform Format Check
@@ -60,20 +60,23 @@ jobs:
 
     - name: Terraform Init
       id: init
-      # DIGITALOCEAN_TOKEN from job env will be used by provider during init
       run: terraform init
 
     - name: Terraform Validate
       id: validate
       run: terraform validate -no-color
 
+    - name: Debug Environment Variables
+      run: |
+        echo "--- Debugging TF_VAR_ environment variables ---"
+        env | grep TF_VAR_
+        echo "--- End Debugging ---"
+
     - name: Terraform Plan
       id: plan
-      # All necessary TF_VAR_* and DIGITALOCEAN_TOKEN are already set in the job's env
       run: terraform plan -no-color
 
     - name: Terraform Apply
       id: apply
       if: github.event_name == 'workflow_dispatch' && github.event.inputs.terraform_action == 'apply'
-      # All necessary TF_VAR_* and DIGITALOCEAN_TOKEN are already set in the job's env
       run: terraform apply -auto-approve -no-color
