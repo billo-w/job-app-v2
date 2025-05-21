@@ -55,10 +55,52 @@ resource "digitalocean_droplet" "job_app_server" {
   # No depends_on needed for data source lookups
 }
 
-resource "digitalocean_firewall_assignment" "assign_firewall" {
-  firewall_id  = var.cloud_firewall_id
-  droplet_ids  = [digitalocean_droplet.job_app_server.id]
+resource "digitalocean_firewall" "managed_firewall" {
+  name = "${var.droplet_name}-firewall"
+
+  droplet_ids = [digitalocean_droplet.job_app_server.id]
+
+  # Allow SSH from anywhere (you can restrict this to your IP for security)
+  inbound_rule {
+    protocol         = "tcp"
+    port_range       = "22"
+    source_addresses = ["0.0.0.0/0", "::/0"]
+  }
+
+  # Allow HTTP (port 80) from anywhere
+  inbound_rule {
+    protocol         = "tcp"
+    port_range       = "80"
+    source_addresses = ["0.0.0.0/0", "::/0"]
+  }
+
+  # Allow HTTPS (port 443) from anywhere
+  inbound_rule {
+    protocol         = "tcp"
+    port_range       = "443"
+    source_addresses = ["0.0.0.0/0", "::/0"]
+  }
+# Allow PostgreSQL (port 5432) from anywhere (not recommended for production)
+  inbound_rule {
+    protocol         = "tcp"
+    port_range       = "5432"
+    source_addresses = ["0.0.0.0/0", "::/0"]
+    }
+  # Outbound: allow all
+  outbound_rule {
+    protocol              = "tcp"
+    port_range            = "all"
+    destination_addresses = ["0.0.0.0/0", "::/0"]
+  }
+
+  outbound_rule {
+    protocol              = "udp"
+    port_range            = "all"
+    destination_addresses = ["0.0.0.0/0", "::/0"]
+  }
+  
 }
+
 
 
 # --- Assign the EXISTING Reserved IP to the Droplet ---
