@@ -21,11 +21,19 @@ jobs:
     name: Terraform Plan or Apply
     runs-on: ubuntu-latest
     env:
-      # For provider authentication (Terraform will pick this up)
+      # This is for the DigitalOcean provider to authenticate if its config block is empty.
+      # It's good to have this set.
       DIGITALOCEAN_TOKEN: ${{ secrets.DO_TOKEN }}
 
-      # --- Explicitly define all TF_VAR_ variables using GitHub Secrets ---
-      # Ensure corresponding secrets exist in your GitHub repository settings.
+      # This explicitly provides a value for 'var.do_token' if it's declared in variables.tf
+      # and used in the provider block as 'token = var.do_token'.
+      # If 'variable "do_token"' is declared, this MUST be set.
+      TF_VAR_do_token: ${{ secrets.DO_TOKEN }}
+
+      # Other TF_VAR_ variables for your configuration
+      TF_VAR_app_name: "job-app" # Default, or use secrets.TF_VAR_APP_NAME
+      TF_VAR_app_region: "lon1"  # Default, or use secrets.TF_VAR_APP_REGION
+      TF_VAR_production_branch: "production" # Default, or use secrets.TF_VAR_PRODUCTION_BRANCH
       TF_VAR_droplet_name: ${{ secrets.TF_VAR_DROPLET_NAME || 'job-app-server-tf' }}
       TF_VAR_droplet_region: ${{ secrets.TF_VAR_DROPLET_REGION || 'lon1' }}
       TF_VAR_droplet_size: ${{ secrets.TF_VAR_DROPLET_SIZE || 's-1vcpu-1gb' }}
@@ -33,7 +41,7 @@ jobs:
       TF_VAR_ssh_key_name_for_root: ${{ secrets.TF_VAR_SSH_KEY_NAME_FOR_ROOT }}
       TF_VAR_deployment_ssh_public_key: ${{ secrets.TF_VAR_DEPLOYMENT_SSH_PUBLIC_KEY }}
       TF_VAR_app_user_name: ${{ secrets.TF_VAR_APP_USER_NAME || 'billo' }}
-      TF_VAR_cloud_firewall_id: ${{ secrets.TF_VAR_CLOUD_FIREWALL_ID }} # Crucial one
+      TF_VAR_cloud_firewall_id: ${{ secrets.TF_VAR_CLOUD_FIREWALL_ID }}
       TF_VAR_existing_reserved_ip_address: ${{ secrets.TF_VAR_EXISTING_RESERVED_IP_ADDRESS }}
       TF_VAR_repo_path: ${{ secrets.TF_VAR_REPO_PATH }}
       TF_VAR_database_url_prod: ${{ secrets.TF_VAR_DATABASE_URL_PROD }}
@@ -42,7 +50,6 @@ jobs:
       TF_VAR_adzuna_app_key: ${{ secrets.TF_VAR_ADZUNA_APP_KEY }}
       TF_VAR_azure_ai_endpoint: ${{ secrets.TF_VAR_AZURE_AI_ENDPOINT }}
       TF_VAR_azure_ai_key: ${{ secrets.TF_VAR_AZURE_AI_KEY }}
-      # Add any other TF_VAR_ variables declared in your variables.tf
 
     steps:
     - name: Checkout code
@@ -51,7 +58,7 @@ jobs:
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
       with:
-        cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+        cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }} # For TFC authentication
 
     - name: Terraform Format Check
       id: fmt
@@ -60,6 +67,8 @@ jobs:
 
     - name: Terraform Init
       id: init
+      # DIGITALOCEAN_TOKEN from job env will be used by provider if its config block is empty
+      # TF_VAR_do_token from job env will be used if provider config is token = var.do_token
       run: terraform init
 
     - name: Terraform Validate
@@ -70,13 +79,16 @@ jobs:
       run: |
         echo "--- Debugging TF_VAR_ environment variables ---"
         env | grep TF_VAR_
+        echo "DIGITALOCEAN_TOKEN is set: ${DIGITALOCEAN_TOKEN:+true}" # Check if DIGITALOCEAN_TOKEN is set (won't print value)
         echo "--- End Debugging ---"
 
     - name: Terraform Plan
       id: plan
+      # All necessary TF_VAR_* and DIGITALOCEAN_TOKEN are set in the job's env
       run: terraform plan -no-color
 
     - name: Terraform Apply
       id: apply
       if: github.event_name == 'workflow_dispatch' && github.event.inputs.terraform_action == 'apply'
+      # All necessary TF_VAR_* and DIGITALOCEAN_TOKEN are set in the job's env
       run: terraform apply -auto-approve -no-color
