@@ -48,10 +48,17 @@ variable "app_user_name" {
   default     = "billo"
 }
 
-variable "cloud_firewall_name" {
-  description = "The name of your existing DigitalOcean Cloud Firewall to assign to the Droplet. Value set in Terraform Cloud."
+variable "cloud_firewall_id" {
+  description = "The id of your existing DigitalOcean Cloud Firewall to assign to the Droplet. Value set in Terraform Cloud."
   type        = string
   # No default, value must be provided in Terraform Cloud
+}
+
+variable "existing_reserved_ip_address" {
+  description = "The IP address string of the existing DigitalOcean Reserved IP to assign to the Droplet. Value set in Terraform Cloud."
+  type        = string
+  # No default, value must be provided in Terraform Cloud
+  # Example: "192.0.2.123"
 }
 
 # Variables for application environment variables (values set in Terraform Cloud)
