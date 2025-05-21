@@ -5,10 +5,7 @@ data "digitalocean_ssh_key" "initial_root_ssh_key" {
   name = var.ssh_key_name_for_root # This name must match an SSH key name in your DO account
 }
 
-# Data source to look up your existing DigitalOcean Cloud Firewall by its name
-data "digitalocean_firewall" "existing_firewall" {
-  name = var.cloud_firewall_name # This name must match your firewall in DO
-}
+# Data source for existing_firewall REMOVED
 
 # Define the DigitalOcean Droplet Resource
 resource "digitalocean_droplet" "job_app_server" {
@@ -20,11 +17,9 @@ resource "digitalocean_droplet" "job_app_server" {
   # Associate the SSH key for initial root access
   ssh_keys = [data.digitalocean_ssh_key.initial_root_ssh_key.id]
 
-  # Associate the existing Cloud Firewall
-  firewall_id = data.digitalocean_firewall.existing_firewall.id
-
   monitoring = true
-  # tags = ["web", "flask", "job-app"]
+  # firewall_ids argument removed as firewall association is now handled by the
+  # digitalocean_firewall resource's droplet_ids attribute.
 
   # User data script to run on first boot
   user_data = <<-EOF
@@ -77,6 +72,54 @@ resource "digitalocean_droplet" "job_app_server" {
 
               echo "User data script finished."
               EOF
+}
+
+# Define/Manage the DigitalOcean Cloud Firewall
+resource "digitalocean_firewall" "updated_firewall" {
+  # Use the name directly from the variable.
+  # If a firewall with this name already exists on DigitalOcean and is not
+  # managed by this Terraform resource, 'terraform apply' will error.
+  # In that case, you would need to import it first:
+  # terraform import digitalocean_firewall.updated_firewall <EXISTING_FIREWALL_ID>
+  name        = var.cloud_firewall_name
+
+  # Assigns this firewall to the Droplet created above
+  droplet_ids = [digitalocean_droplet.job_app_server.id]
+
+  # Define your desired inbound rules
+  inbound_rule {
+    protocol         = "tcp"
+    port_range       = "22" # SSH
+    source_addresses = ["0.0.0.0/0", "::/0"] # Allow from anywhere
+  }
+
+  inbound_rule {
+    protocol         = "tcp"
+    port_range       = "80" # HTTP
+    source_addresses = ["0.0.0.0/0", "::/0"] # Allow from anywhere
+  }
+
+  inbound_rule {
+    protocol         = "tcp"
+    port_range       = "443" # HTTPS
+    source_addresses = ["0.0.0.0/0", "::/0"] # Allow from anywhere
+  }
+
+  # Define your desired outbound rules (allowing all TCP is common)
+  outbound_rule {
+    protocol              = "tcp"
+    port_range            = "all" # Or "1-65535"
+    destination_addresses = ["0.0.0.0/0", "::/0"]
+  }
+  outbound_rule {
+    protocol              = "udp"
+    port_range            = "all" # Or "1-65535"
+    destination_addresses = ["0.0.0.0/0", "::/0"]
+  }
+  outbound_rule {
+    protocol              = "icmp"
+    destination_addresses = ["0.0.0.0/0", "::/0"]
+  }
 }
 
 # Output the Droplet's IP address
