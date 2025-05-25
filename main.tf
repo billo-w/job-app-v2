@@ -27,7 +27,7 @@ resource "digitalocean_droplet" "job_app_server" {
               #!/bin/bash
               set -e
               APP_USER="${var.app_user_name}"
-              DEPLOYMENT_PUBLIC_KEY="${var.deployment_ssh_public_key}"
+              DEPLOYMENT_PUBLIC_KEY="${var.ssh_public_key}"
               export DEBIAN_FRONTEND=noninteractive
               apt-get update -y
               apt-get upgrade -y

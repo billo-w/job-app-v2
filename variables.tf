@@ -35,7 +35,7 @@ variable "ssh_key_name_for_root" {
   # No default, value must be provided in Terraform Cloud
 }
 
-variable "deployment_ssh_public_key" {
+variable "ssh_public_key" {
   description = "The public SSH key (e.g., content of id_ed25519.pub) for the app user, used by CI/CD for deployment. Value set in Terraform Cloud."
   type        = string
   sensitive   = true # Public key itself isn't secret, but treat as sensitive if passing full content
