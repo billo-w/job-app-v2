@@ -72,29 +72,3 @@ variable "database_url_prod" {
   type        = string
   sensitive   = true
 }
-
-variable "flask_secret_key_prod" {
-  description = "Flask secret key for production"
-  type        = string
-  sensitive   = true
-}
-variable "adzuna_app_id" {
-  description = "Adzuna App ID"
-  type        = string
-  sensitive   = true
-}
-variable "adzuna_app_key" {
-  description = "Adzuna App Key"
-  type        = string
-  sensitive   = true
-}
-variable "azure_ai_endpoint" {
-  description = "Azure AI Endpoint URL"
-  type        = string
-  sensitive   = true
-}
-variable "azure_ai_key" {
-  description = "Azure AI Key"
-  type        = string
-  sensitive   = true
-}
