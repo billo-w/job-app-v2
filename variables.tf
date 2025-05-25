@@ -32,14 +32,14 @@ variable "droplet_image" {
 variable "ssh_key_name_for_root" {
   description = "The name of your SSH key in DO for initial root access to the Droplet. Value set in Terraform Cloud."
   type        = string
-  # No default, value must be provided in Terraform Cloud
+  # No default, value must be provided
 }
 
-variable "ssh_public_key" {
-  description = "The public SSH key (e.g., content of id_ed25519.pub) for the app user, used by CI/CD for deployment. Value set in Terraform Cloud."
+variable "ssh_public_key" { # RENAMED from deployment_ssh_public_key
+  description = "The public SSH key (e.g., content of id_ed25519.pub) for the app user, used by CI/CD for deployment. Value set via TF_VAR_SSH_PUBLIC_KEY secret."
   type        = string
-  sensitive   = true # Public key itself isn't secret, but treat as sensitive if passing full content
-  # No default, value must be provided in Terraform Cloud
+  sensitive   = true
+  # No default, value must be provided
 }
 
 variable "app_user_name" {
@@ -49,52 +49,51 @@ variable "app_user_name" {
 }
 
 variable "cloud_firewall_id" {
-  description = "The id of your existing DigitalOcean Cloud Firewall to assign to the Droplet. Value set in Terraform Cloud."
+  description = "The ID of your existing DigitalOcean Cloud Firewall to assign to the Droplet. Value set via TF_VAR_CLOUD_FIREWALL_ID secret."
   type        = string
-  # No default, value must be provided in Terraform Cloud
+  # No default, value must be provided
 }
 
 variable "existing_reserved_ip_address" {
-  description = "The IP address string of the existing DigitalOcean Reserved IP to assign to the Droplet. Value set in Terraform Cloud."
+  description = "The IP address string of the existing DigitalOcean Reserved IP to assign to the Droplet. Value set via TF_VAR_EXISTING_RESERVED_IP_ADDRESS secret."
   type        = string
-  # No default, value must be provided in Terraform Cloud
-  # Example: "192.0.2.123"
+  # No default, value must be provided
 }
 
-# Variables for application environment variables (values set in Terraform Cloud)
+# Variables for application environment variables (values set in Terraform Cloud or GitHub Secrets)
 variable "repo_path" {
-  description = "GitHub repository path (e.g., your_username/your_repo_name)"
+  description = "GitHub repository path (e.g., your_username/your_repo_name). Value set via TF_VAR_REPO_PATH secret."
   type        = string
 }
 
 variable "database_url_prod" {
-  description = "Connection string (DATABASE_URL) for the production database"
+  description = "Connection string (DATABASE_URL) for the production database. Value set via TF_VAR_DATABASE_URL_PROD secret."
   type        = string
   sensitive   = true
 }
 
 variable "flask_secret_key_prod" {
-  description = "Flask secret key for production"
+  description = "Flask secret key for production. Value set via TF_VAR_FLASK_SECRET_KEY_PROD secret."
   type        = string
   sensitive   = true
 }
 variable "adzuna_app_id" {
-  description = "Adzuna App ID"
+  description = "Adzuna App ID. Value set via TF_VAR_ADZUNA_APP_ID secret."
   type        = string
   sensitive   = true
 }
 variable "adzuna_app_key" {
-  description = "Adzuna App Key"
+  description = "Adzuna App Key. Value set via TF_VAR_ADZUNA_APP_KEY secret."
   type        = string
   sensitive   = true
 }
 variable "azure_ai_endpoint" {
-  description = "Azure AI Endpoint URL"
+  description = "Azure AI Endpoint URL. Value set via TF_VAR_AZURE_AI_ENDPOINT secret."
   type        = string
   sensitive   = true
 }
 variable "azure_ai_key" {
-  description = "Azure AI Key"
+  description = "Azure AI Key. Value set via TF_VAR_AZURE_AI_KEY secret."
   type        = string
   sensitive   = true
 }
