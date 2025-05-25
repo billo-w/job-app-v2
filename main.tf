@@ -20,13 +20,14 @@ resource "digitalocean_droplet" "job_app_server" {
   ssh_keys = [data.digitalocean_ssh_key.initial_root_ssh_key.id]
   monitoring = true
 
+  # --- Assign the existing Cloud Firewall using firewall_ids (plural) ---
+  # This expects a list of firewall IDs.
+
   user_data = <<-EOF
               #!/bin/bash
               set -e
               APP_USER="${var.app_user_name}"
-              # --- CORRECTED VARIABLE REFERENCE ---
               DEPLOYMENT_PUBLIC_KEY="${var.ssh_public_key}"
-
               export DEBIAN_FRONTEND=noninteractive
               apt-get update -y
               apt-get upgrade -y
@@ -43,26 +44,72 @@ resource "digitalocean_droplet" "job_app_server" {
               chown "$APP_USER:$APP_USER" "$APP_USER_HOME"
               chown "$APP_USER:$APP_USER" "$SSH_DIR"
               chmod 700 "$SSH_DIR"
-              echo "$DEPLOYMENT_PUBLIC_KEY" > "$AUTH_KEYS_FILE" # This now uses var.ssh_public_key
+              echo "$DEPLOYMENT_PUBLIC_KEY" > "$AUTH_KEYS_FILE"
               chown "$APP_USER:$APP_USER" "$AUTH_KEYS_FILE"
               chmod 600 "$AUTH_KEYS_FILE"
               systemctl enable nginx
               systemctl start nginx
               echo "User data script finished."
               EOF
+
+  # No depends_on needed for data source lookups
 }
 
-# --- Assign an EXISTING Cloud Firewall to the Droplet ---
-resource "digitalocean_firewall_assignment" "assign_firewall" {
-  firewall_id  = var.cloud_firewall_id
-  droplet_ids  = [digitalocean_droplet.job_app_server.id]
+resource "digitalocean_firewall" "managed_firewall" {
+  name = "${var.droplet_name}-firewall"
+
+  droplet_ids = [digitalocean_droplet.job_app_server.id]
+
+  # Allow SSH from anywhere (you can restrict this to your IP for security)
+  inbound_rule {
+    protocol         = "tcp"
+    port_range       = "22"
+    source_addresses = ["0.0.0.0/0", "::/0"]
+  }
+
+  # Allow HTTP (port 80) from anywhere
+  inbound_rule {
+    protocol         = "tcp"
+    port_range       = "80"
+    source_addresses = ["0.0.0.0/0", "::/0"]
+  }
+
+  # Allow HTTPS (port 443) from anywhere
+  inbound_rule {
+    protocol         = "tcp"
+    port_range       = "443"
+    source_addresses = ["0.0.0.0/0", "::/0"]
+  }
+# Allow PostgreSQL (port 5432) from anywhere (not recommended for production)
+  inbound_rule {
+    protocol         = "tcp"
+    port_range       = "5432"
+    source_addresses = ["0.0.0.0/0", "::/0"]
+    }
+  # Outbound: allow all
+  outbound_rule {
+    protocol              = "tcp"
+    port_range            = "all"
+    destination_addresses = ["0.0.0.0/0", "::/0"]
+  }
+
+  outbound_rule {
+    protocol              = "udp"
+    port_range            = "all"
+    destination_addresses = ["0.0.0.0/0", "::/0"]
+  }
+  
 }
+
+
 
 # --- Assign the EXISTING Reserved IP to the Droplet ---
 resource "digitalocean_reserved_ip_assignment" "job_app_ip_assign" {
-  ip_address = data.digitalocean_reserved_ip.existing_job_app_ip.ip_address
+  ip_address = data.digitalocean_reserved_ip.existing_job_app_ip.ip_address # Use IP from data source
   droplet_id = digitalocean_droplet.job_app_server.id
 }
+
+# Resource block for "digitalocean_firewall" "managed_firewall" REMOVED
 
 # Output the (existing) Reserved IP address assigned to the Droplet
 output "droplet_assigned_reserved_ip" {
